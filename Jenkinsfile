@@ -2,7 +2,8 @@ pipeline {
     agent any
 
     environment {
-        COMPOSE_PROJECT = 'feeling-palette'
+        IMAGE_NAME = 'feeling-palette-api'
+        CONTAINER_NAME = 'feeling-palette-api'
         CLAUDE_API_KEY = credentials('claude-api-key')
     }
 
@@ -15,22 +16,30 @@ pipeline {
 
         stage('Build') {
             steps {
-                sh 'docker compose build --no-cache'
+                sh 'docker build -t ${IMAGE_NAME}:latest .'
             }
         }
 
         stage('Deploy') {
             steps {
-                sh 'docker compose down || true'
-                sh 'docker compose up -d'
+                sh 'docker stop ${CONTAINER_NAME} || true'
+                sh 'docker rm ${CONTAINER_NAME} || true'
+                sh '''
+                    docker run -d \
+                        --name ${CONTAINER_NAME} \
+                        --restart unless-stopped \
+                        -p 8100:8080 \
+                        -e CLAUDE_API_KEY=${CLAUDE_API_KEY} \
+                        ${IMAGE_NAME}:latest
+                '''
             }
         }
 
         stage('Health Check') {
             steps {
                 sh '''
-                    sleep 3
-                    curl -sf http://feeling-palette-api:8080/docs > /dev/null && echo "Health check passed" || curl -sf http://localhost:8100/docs > /dev/null && echo "Health check passed (localhost)" || (echo "Health check failed" && exit 1)
+                    sleep 5
+                    curl -sf http://localhost:8100/docs > /dev/null && echo "Health check passed" || (echo "Health check failed" && exit 1)
                 '''
             }
         }
@@ -44,7 +53,7 @@ pipeline {
 
     post {
         failure {
-            sh 'docker compose logs feeling-palette-api || true'
+            sh 'docker logs ${CONTAINER_NAME} || true'
         }
     }
 }
