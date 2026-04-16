@@ -4,6 +4,6 @@ services:
     container_name: feeling-palette-api
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8100:8080"
     environment:
       - CLAUDE_API_KEY=${CLAUDE_API_KEY}

@@ -30,7 +30,7 @@ pipeline {
             steps {
                 sh '''
                     sleep 3
-                    curl -sf http://feeling-palette-api:8080/docs > /dev/null && echo "Health check passed" || curl -sf http://localhost:8080/docs > /dev/null && echo "Health check passed (localhost)" || (echo "Health check failed" && exit 1)
+                    curl -sf http://feeling-palette-api:8080/docs > /dev/null && echo "Health check passed" || curl -sf http://localhost:8100/docs > /dev/null && echo "Health check passed (localhost)" || (echo "Health check failed" && exit 1)
                 '''
             }
         }
