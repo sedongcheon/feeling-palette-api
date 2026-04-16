@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         COMPOSE_PROJECT = 'feeling-palette'
+        CLAUDE_API_KEY = credentials('claude-api-key')
     }
 
     stages {
