@@ -98,7 +98,7 @@ curl -X POST http://localhost:8100/api/diary/analyze \
 ### Lambda용 이미지 (RIE 에뮬레이터)
 
 ```bash
-docker buildx build --platform linux/amd64 --provenance=false -f Dockerfile.lambda -t feeling-palette-lambda:local .
+docker buildx build --platform linux/arm64 --provenance=false -f Dockerfile.lambda -t feeling-palette-lambda:local .
 
 docker run -d --name lambda-test -p 9000:8080 \
   -e GEMINI_API_KEY="$(grep GEMINI_API_KEY .env | cut -d= -f2)" \
@@ -136,11 +136,13 @@ curl -s -XPOST "http://localhost:9000/2015-03-31/functions/function/invocations"
 docker stop lambda-test && docker rm lambda-test
 ```
 
-### 주의: Apple Silicon 빌드
+### 아키텍처 플래그
 
-Lambda는 기본 x86_64 아키텍처를 사용하므로 M1/M2/M3 Mac에서는 반드시 `--platform linux/amd64` 플래그 필요.
+현재 Lambda는 **arm64 (Graviton2)** 로 배포되어 있음. 빌드 시:
+- `--platform linux/arm64`: 현재 기본값. Apple Silicon Mac에서 네이티브라 빌드도 빠름.
+- `--platform linux/amd64`: x86_64로 되돌릴 때. `template.yaml`의 `Architectures`도 함께 변경해야 함.
 
-arm64 Lambda를 쓸 경우 `--platform linux/arm64` (20% 저렴하지만 base image 지원 확인 필요).
+**주의**: `template.yaml`의 `Architectures`와 Docker buildx `--platform`이 반드시 일치해야 함. 불일치 시 Lambda가 `exec format error`로 실패.
 
 ## Git 워크플로우
 
