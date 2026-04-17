@@ -38,8 +38,13 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                    sleep 5
-                    docker exec ${CONTAINER_NAME} python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/docs')" && echo "Health check passed" || (echo "Health check failed" && exit 1)
+                    for i in 1 2 3 4 5; do
+                        sleep 3
+                        docker exec ${CONTAINER_NAME} python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/docs')" && echo "Health check passed" && exit 0
+                        echo "Attempt $i failed, retrying..."
+                    done
+                    echo "Health check failed after 5 attempts"
+                    exit 1
                 '''
             }
         }
