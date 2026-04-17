@@ -53,7 +53,8 @@ CMD ["lambda_handler.handler"]
 
 ```bash
 # Apple Silicon이면 반드시 --platform linux/amd64
-docker buildx build --platform linux/amd64 -f Dockerfile.lambda -t feeling-palette-lambda:local .
+# --provenance=false 필수 (Lambda는 OCI manifest list 미지원)
+docker buildx build --platform linux/amd64 --provenance=false -f Dockerfile.lambda -t feeling-palette-lambda:local .
 
 docker run -d --name lambda-test -p 9000:8080 \
   -e GEMINI_API_KEY="$(grep GEMINI_API_KEY .env | cut -d= -f2)" \
@@ -411,6 +412,7 @@ Year 2 이후: 약 $0.15~0.20/월.
 | 증상 | 원인 | 해결 |
 |------|------|------|
 | `exec format error` | 아키텍처 불일치 | `--platform linux/amd64` 필수 |
+| `image manifest ... is not supported` | buildx OCI manifest list | `--provenance=false` 추가 |
 | `KeyError: 'sourceIp'` | Lambda 이벤트 형식 오류 | requestContext.http.sourceIp 포함 |
 | Cold start 오래 걸림 | 메모리 부족 | 512 → 1024 MB |
 | 403 from Gemini | API key 문제 | Lambda env var 재확인, Google Cloud에서 Gemini API enable |
@@ -440,12 +442,19 @@ TTL 300이면 5분 내 복구.
 - [x] Phase 1.1: 코드 변경 (lambda_handler, Dockerfile.lambda, mangum)
 - [x] Phase 1.2: 로컬 RIE 테스트
 - [x] Phase 1.3: ECR push
-- [ ] Phase 1.4: Lambda 함수 생성 (진행 중)
-- [ ] Phase 1.5: 테스트
-- [ ] Phase 1.6: API Gateway HTTP API
-- [ ] Phase 1.7: 커스텀 도메인 연결
+- [x] Phase 1.4: Lambda 함수 생성
+- [x] Phase 1.5: 테스트 성공
+- [x] Phase 1.6: API Gateway HTTP API (`prla2b674h.execute-api.ap-northeast-2.amazonaws.com`)
+- [x] Phase 1.7: 커스텀 도메인 연결 (`feeling-api-aws.sedoli.co.kr` — 병행 운영)
 - [ ] Phase 2: SAM IaC
 - [ ] Phase 3: GitHub Actions CI/CD
+
+## 현재 엔드포인트
+
+| 환경 | URL | 비고 |
+|------|-----|------|
+| NAS (기존) | https://feeling-api.sedoli.cloud | 운영 중 |
+| AWS Lambda (신규) | https://feeling-api-aws.sedoli.co.kr | 검증용, 병행 |
 
 ## 참고 링크
 

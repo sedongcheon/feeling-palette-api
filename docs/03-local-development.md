@@ -98,7 +98,7 @@ curl -X POST http://localhost:8100/api/diary/analyze \
 ### Lambda용 이미지 (RIE 에뮬레이터)
 
 ```bash
-docker buildx build --platform linux/amd64 -f Dockerfile.lambda -t feeling-palette-lambda:local .
+docker buildx build --platform linux/amd64 --provenance=false -f Dockerfile.lambda -t feeling-palette-lambda:local .
 
 docker run -d --name lambda-test -p 9000:8080 \
   -e GEMINI_API_KEY="$(grep GEMINI_API_KEY .env | cut -d= -f2)" \
