@@ -414,50 +414,92 @@ aws apigatewayv2 create-api-mapping \
 
 이미지만 새로 빌드/푸시한 뒤 동일한 `sam deploy` 재실행하면 됨. Infrastructure 변경 없이 코드만 바뀌면 Lambda만 업데이트됨.
 
-## Phase 3: GitHub Actions CI/CD (예정)
+## Phase 3: GitHub Actions CI/CD (완료)
 
-Jenkins 은퇴. `main` 브랜치 push → 자동 ECR push + Lambda 업데이트.
+`main` 브랜치에 push되면 자동으로 ECR 빌드/푸시 + SAM 배포 + smoke test 실행.
+AWS Access Key를 GitHub Secrets에 저장하지 않고 **OIDC federation**으로 안전하게 인증.
 
-### OIDC 신뢰 설정
-1. IAM → Identity providers → Add:
-   - URL: `https://token.actions.githubusercontent.com`
-   - Audience: `sts.amazonaws.com`
-2. Role `github-actions-feeling-palette` 생성 (trust policy를 GH 레포로 스코프)
+### 3.1 GitHub OIDC Identity Provider (AWS)
 
-### `.github/workflows/deploy.yml`
-```yaml
-name: Deploy to Lambda
-on:
-  push:
-    branches: [main]
-permissions:
-  id-token: write
-  contents: read
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::ACCOUNT_ID:role/github-actions-feeling-palette
-          aws-region: ap-northeast-2
-      - uses: aws-actions/amazon-ecr-login@v2
-        id: ecr
-      - name: Build and push
-        run: |
-          IMAGE=${{ steps.ecr.outputs.registry }}/feeling-palette:${{ github.sha }}
-          docker build --platform linux/amd64 -f Dockerfile.lambda -t $IMAGE .
-          docker push $IMAGE
-      - uses: aws-actions/setup-sam@v2
-      - name: SAM deploy
-        run: sam deploy --stack-name feeling-palette --no-confirm-changeset --no-fail-on-empty-changeset
-      - name: Smoke test
-        run: |
-          curl -fsS -XPOST https://feeling-api.sedoli.cloud/api/diary/analyze \
-            -H 'content-type: application/json' \
-            -d '{"content":"배포 확인"}'
+```bash
+aws iam create-open-id-connect-provider \
+  --url https://token.actions.githubusercontent.com \
+  --client-id-list sts.amazonaws.com \
+  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
 ```
+
+### 3.2 IAM Role (GitHub Actions 전용)
+
+Trust policy는 특정 GitHub 레포에만 AssumeRole 허용:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {
+      "Federated": "arn:aws:iam::811821010182:oidc-provider/token.actions.githubusercontent.com"
+    },
+    "Action": "sts:AssumeRoleWithWebIdentity",
+    "Condition": {
+      "StringEquals": {"token.actions.githubusercontent.com:aud": "sts.amazonaws.com"},
+      "StringLike": {"token.actions.githubusercontent.com:sub": "repo:sedongcheon/feeling-palette-api:*"}
+    }
+  }]
+}
+```
+
+실제 부여한 권한 (최소권한 기준):
+- ECR push/pull: `feeling-palette*` 레포
+- CloudFormation: SAM 배포용 (`GetTemplateSummary` 포함)
+- Lambda 관리: `feeling-palette*` 함수
+- API Gateway: 전체
+- IAM: Lambda 실행 role 관리 (`feeling-palette-*`)
+- CloudWatch Logs: Lambda 로그 그룹
+- SSM: `/feeling-palette/*` 읽기 + KMS Decrypt (SecureString용)
+- S3: SAM 관리 버킷
+
+역할 생성:
+```bash
+aws iam create-role \
+  --role-name github-actions-feeling-palette \
+  --assume-role-policy-document file://trust-policy.json
+
+aws iam put-role-policy \
+  --role-name github-actions-feeling-palette \
+  --policy-name deploy-policy \
+  --policy-document file://deploy-policy.json
+```
+
+### 3.3 Workflow 파일 (`.github/workflows/deploy.yml`)
+
+핵심 동작:
+1. `actions/checkout@v4` + OIDC 인증 (`configure-aws-credentials@v4`)
+2. ECR 로그인 → Docker buildx로 `linux/amd64` + `--provenance=false` 빌드 → `:sha`와 `:latest` 둘 다 push
+3. SSM에서 Gemini API key 복호화 읽기 (`::add-mask::`로 로그 마스킹)
+4. `sam deploy` (with `--image-repository` 필수)
+5. Smoke test: `feeling-api-aws.sedoli.co.kr` curl 5회 재시도
+
+`main` push + `workflow_dispatch` (수동 실행) 둘 다 트리거.
+
+### 3.4 삽질 포인트
+
+1. **GitHub PAT에 `workflow` 권한 필요**: classic 토큰의 `repo`만으로는 workflow 파일 push 거부
+2. **`sam deploy` with Image package**: `--image-repository` 옵션 필수 (아니면 "Missing option" 에러)
+3. **IAM 권한은 에러 나오는 대로 추가**: `GetTemplateSummary` 같은 건 사전에 예측 어려움
+
+### 3.5 이후 배포 흐름
+
+```
+로컬: git commit + git push origin release/release (GitLab) + git push github release/release
+   ↓
+GitHub UI: release/release → main PR 생성 + 머지
+   ↓
+GitHub Actions 자동 실행 (~4분)
+   ↓
+Lambda 업데이트 + smoke test 통과 → 배포 완료
+```
+
+Jenkins는 NAS 운영이 필요 없어지면 은퇴 가능.
 
 ## 비용 예상
 
@@ -526,7 +568,7 @@ TTL 300이면 5분 내 복구.
 - [x] Phase 1.6: API Gateway HTTP API (`prla2b674h.execute-api.ap-northeast-2.amazonaws.com`)
 - [x] Phase 1.7: 커스텀 도메인 연결 (`feeling-api-aws.sedoli.co.kr` — 병행 운영)
 - [x] Phase 2: SAM IaC (`template.yaml` 작성 및 `sam deploy` 완료)
-- [ ] Phase 3: GitHub Actions CI/CD
+- [x] Phase 3: GitHub Actions CI/CD (OIDC + 자동 배포)
 
 ## 현재 엔드포인트
 

@@ -39,7 +39,7 @@ jobs:
           IMAGE=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
           IMAGE_LATEST=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
           docker buildx build \
-            --platform linux/amd64 \
+            --platform linux/arm64 \
             --provenance=false \
             -f Dockerfile.lambda \
             -t "$IMAGE" \
