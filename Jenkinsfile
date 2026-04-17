@@ -4,7 +4,7 @@ pipeline {
     environment {
         IMAGE_NAME = 'feeling-palette-api'
         CONTAINER_NAME = 'feeling-palette-api'
-        CLAUDE_API_KEY = credentials('claude-api-key')
+        GEMINI_API_KEY = credentials('gemini-api-key')
     }
 
     stages {
@@ -29,7 +29,7 @@ pipeline {
                         --name ${CONTAINER_NAME} \
                         --restart unless-stopped \
                         -p 8100:8080 \
-                        -e CLAUDE_API_KEY=${CLAUDE_API_KEY} \
+                        -e GEMINI_API_KEY=${GEMINI_API_KEY} \
                         ${IMAGE_NAME}:latest
                 '''
             }
