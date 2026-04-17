@@ -196,73 +196,134 @@ curl -X POST https://abc123.execute-api.ap-northeast-2.amazonaws.com/api/diary/a
   -d '{"content":"테스트"}'
 ```
 
-### 1.7 커스텀 도메인 (feeling-api.sedoli.cloud)
+### 1.7 커스텀 도메인 연결
+
+실제 사용한 도메인: **`feeling-api-aws.sedoli.co.kr`** (가비아 DNS 관리)
+
+운영 중인 `feeling-api.sedoli.cloud` (Synology NAS 가리킴)을 유지하며 별도 테스트 도메인으로 AWS 병행 운영.
 
 #### 1. ACM 인증서 요청
 
-⚠️ **ap-northeast-2 리전**에서 요청 (us-east-1 아님).
+⚠️ 반드시 **ap-northeast-2 리전**에서 요청 (us-east-1 아님 — Regional API Gateway는 같은 리전 인증서 필요).
 
-1. ACM Console: https://ap-northeast-2.console.aws.amazon.com/acm
-2. **Request certificate** → **Public certificate** → Next
-3. Fully qualified domain name: `feeling-api.sedoli.cloud`
-4. Validation method: **DNS validation**
-5. **Request**
+**CLI로 요청**:
+```bash
+aws acm request-certificate \
+  --domain-name feeling-api-aws.sedoli.co.kr \
+  --validation-method DNS \
+  --region ap-northeast-2
+```
 
-생성된 인증서 클릭 → **Domains** 섹션에 CNAME 검증 레코드 표시:
-- Name: `_abc123.feeling-api.sedoli.cloud`
-- Value: `_xyz456.acm-validations.aws`
+출력된 `CertificateArn`을 변수에 저장:
+```bash
+CERT_ARN=arn:aws:acm:ap-northeast-2:811821010182:certificate/xxxxx
+```
 
-이 CNAME을 **Synology DNS Server**에 추가:
-1. DSM → DNS Server → 영역 편집 → `sedoli.cloud`
-2. 리소스 레코드 추가:
-   - 이름: `_abc123.feeling-api`
-   - 유형: CNAME
-   - 값: `_xyz456.acm-validations.aws.`
-
-5~30분 대기 → ACM 상태가 **Issued**로 변경.
-
-#### 2. API Gateway 커스텀 도메인 연결
-
-1. API Gateway → **Custom domain names** → **Create**
-2. 설정:
-   - Domain name: `feeling-api.sedoli.cloud`
-   - Minimum TLS version: `TLS 1.2`
-   - Endpoint type: **Regional**
-   - ACM certificate: 위에서 Issued된 인증서 선택
-3. **Create domain name**
-4. 생성 후 표시되는 **API Gateway domain name** 복사 (예: `d-abcxyz.execute-api.ap-northeast-2.amazonaws.com`)
-
-5. 같은 페이지 **API mappings** 탭 → **Configure API mappings**:
-   - API: `feeling-palette-http-api`
-   - Stage: `$default`
-   - Path: (비워둠)
-6. Save
-
-#### 3. Synology DNS CNAME 추가
-
-1. DSM → DNS Server → 영역 편집 → `sedoli.cloud`
-2. 기존 `feeling-api` A 레코드 (NAS IP 가리킴) → **삭제**
-3. 새 레코드 추가:
-   - 이름: `feeling-api`
-   - 유형: CNAME
-   - 값: `d-abcxyz.execute-api.ap-northeast-2.amazonaws.com.`
-   - TTL: 300
-
-⚠️ **컷오버 전날** TTL을 300초로 낮춰두면 롤백 시 빠르게 복구 가능.
-
-#### 4. 검증
+#### 2. DNS 검증 레코드 확인
 
 ```bash
-# DNS 전파 확인 (5분 정도 기다림)
-dig feeling-api.sedoli.cloud
+aws acm describe-certificate \
+  --certificate-arn $CERT_ARN \
+  --region ap-northeast-2 \
+  --query 'Certificate.DomainValidationOptions[0].ResourceRecord'
+```
 
-# API 동작 확인
-curl -X POST https://feeling-api.sedoli.cloud/api/diary/analyze \
+출력 예:
+```json
+{
+  "Name": "_979e7e7f126172b617144f889c5f94ec.feeling-api-aws.sedoli.co.kr.",
+  "Type": "CNAME",
+  "Value": "_3843a039192d94783738c92e75ba95e8.jkddzztszm.acm-validations.aws."
+}
+```
+
+#### 3. 가비아 DNS에 검증 CNAME 추가
+
+1. https://dns.gabia.com 접속 → `sedoli.co.kr` **DNS 관리** → **레코드 수정**
+2. **레코드 추가**:
+   - **타입**: CNAME
+   - **호스트**: `_979e7e7f126172b617144f889c5f94ec.feeling-api-aws` (⚠️ `sedoli.co.kr` 제외)
+   - **값/위치**: `_3843a039192d94783738c92e75ba95e8.jkddzztszm.acm-validations.aws.` (⚠️ 끝에 `.` 필수)
+   - **TTL**: 600
+3. **저장** → **설정 적용** (가비아는 2단계)
+
+#### 4. ACM 발급 완료 확인
+
+```bash
+aws acm describe-certificate \
+  --certificate-arn $CERT_ARN \
+  --region ap-northeast-2 \
+  --query 'Certificate.Status' --output text
+```
+
+`ISSUED`로 바뀌면 다음 단계 (보통 5분 이내, 늦어도 30분).
+
+#### 5. API Gateway 커스텀 도메인 생성
+
+```bash
+aws apigatewayv2 create-domain-name \
+  --domain-name feeling-api-aws.sedoli.co.kr \
+  --domain-name-configurations \
+    CertificateArn=$CERT_ARN,EndpointType=REGIONAL,SecurityPolicy=TLS_1_2 \
+  --region ap-northeast-2
+```
+
+응답의 `ApiGatewayDomainName` 필드 (예: `d-2gc7ye9t7b.execute-api.ap-northeast-2.amazonaws.com`)를 기록.
+
+#### 6. API 매핑 연결
+
+API Gateway HTTP API ID (예: `prla2b674h`) 확인 후:
+```bash
+aws apigatewayv2 create-api-mapping \
+  --domain-name feeling-api-aws.sedoli.co.kr \
+  --api-id prla2b674h \
+  --stage '$default' \
+  --region ap-northeast-2
+```
+
+#### 7. 가비아 DNS에 서비스 CNAME 추가
+
+- **타입**: CNAME
+- **호스트**: `feeling-api-aws`
+- **값**: `d-2gc7ye9t7b.execute-api.ap-northeast-2.amazonaws.com.` (⚠️ 끝 `.` 필수)
+- **TTL**: 300
+- **저장 + 설정 적용**
+
+#### 8. 검증
+
+DNS 전파 대기 (보통 1~5분):
+```bash
+dig +short feeling-api-aws.sedoli.co.kr CNAME
+# → d-2gc7ye9t7b.execute-api.ap-northeast-2.amazonaws.com.
+```
+
+API 호출:
+```bash
+curl -X POST https://feeling-api-aws.sedoli.co.kr/api/diary/analyze \
   -H 'Content-Type: application/json' \
-  -d '{"content":"테스트"}'
+  -d '{"content":"오늘 날씨가 좋아서 기분이 좋았다"}'
 ```
 
 정상 응답 나오면 **Phase 1 완료!** 🎉
+
+#### 참고: Console UI로 같은 작업
+
+CLI 대신 Console을 쓰려면:
+- ACM: https://ap-northeast-2.console.aws.amazon.com/acm
+- API Gateway: Custom domain names → Create
+
+화면에 생성되는 CNAME을 그대로 가비아에 추가하면 됨.
+
+#### 나중에 운영 도메인 전환 (선택)
+
+완전 이전 결정 시 `feeling-api.sedoli.cloud` → AWS로 변경:
+1. Synology DNS에서 `feeling-api` A 레코드 (NAS IP) 삭제
+2. CNAME 추가: `feeling-api` → `d-2gc7ye9t7b.execute-api.ap-northeast-2.amazonaws.com.`
+3. ACM에 `feeling-api.sedoli.cloud` 추가 인증서 요청 (또는 SAN 추가)
+4. API Gateway 커스텀 도메인 추가 + 매핑
+5. 앱 클라이언트는 변경 불필요 (URL 동일)
+
+⚠️ 컷오버 전날 TTL을 300초로 낮춰두면 롤백 빠름.
 
 ## Phase 2: AWS SAM IaC (예정)
 

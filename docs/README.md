@@ -56,7 +56,7 @@ feelingPaletteAgent/
 |------|-----|------|
 | 로컬 개발 | http://localhost:8080 | - |
 | NAS (운영) | https://feeling-api.sedoli.cloud | ✅ 운영 중 |
-| AWS Lambda | (마이그레이션 진행 중) | 🚧 Phase 1 |
+| AWS Lambda (검증용) | https://feeling-api-aws.sedoli.co.kr | ✅ 병행 운영 |
 
 ## 기여자
 
