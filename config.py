@@ -1,15 +1,15 @@
 import os
 
 from dotenv import load_dotenv
-from langchain_anthropic import ChatAnthropic
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 load_dotenv()
 
-CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-llm = ChatAnthropic(
-    model="claude-sonnet-4-20250514",
-    max_tokens=512,
-    api_key=CLAUDE_API_KEY,
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.0-flash-lite",
+    max_output_tokens=512,
+    google_api_key=GEMINI_API_KEY,
     timeout=30,
 )
