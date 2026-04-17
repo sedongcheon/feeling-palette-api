@@ -39,7 +39,7 @@ pipeline {
             steps {
                 sh '''
                     sleep 5
-                    curl -sf http://localhost:8100/docs > /dev/null && echo "Health check passed" || (echo "Health check failed" && exit 1)
+                    docker exec ${CONTAINER_NAME} python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/docs')" && echo "Health check passed" || (echo "Health check failed" && exit 1)
                 '''
             }
         }
