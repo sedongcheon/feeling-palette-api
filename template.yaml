@@ -18,7 +18,7 @@ Resources:
       FunctionName: feeling-palette-api
       PackageType: Image
       ImageUri: !Ref ImageUri
-      Architectures: [x86_64]
+      Architectures: [arm64]
       MemorySize: 512
       Timeout: 30
       Environment:
