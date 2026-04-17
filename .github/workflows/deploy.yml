@@ -72,6 +72,7 @@ jobs:
             --region ${{ env.AWS_REGION }} \
             --capabilities CAPABILITY_IAM \
             --parameter-overrides ImageUri=$IMAGE_URI GeminiApiKey=$GEMINI_API_KEY \
+            --image-repository ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
             --resolve-s3 \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
