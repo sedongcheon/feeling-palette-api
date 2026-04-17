@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Feeling Palette API - FastAPI + Gemini on Lambda
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: ECR image URI for the Lambda function
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+    Description: Gemini API key (fetched from SSM SecureString at deploy time)
+
+Resources:
+  FeelingPaletteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: feeling-palette-api
+      PackageType: Image
+      ImageUri: !Ref ImageUri
+      Architectures: [x86_64]
+      MemorySize: 512
+      Timeout: 30
+      Environment:
+        Variables:
+          GEMINI_API_KEY: !Ref GeminiApiKey
+      Events:
+        Analyze:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref FeelingPaletteApi
+            Path: /api/diary/analyze
+            Method: POST
+
+  FeelingPaletteApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: $default
+
+  FeelingPaletteFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${FeelingPaletteFunction}
+      RetentionInDays: 7
+
+Outputs:
+  ApiEndpoint:
+    Description: Default API Gateway invoke URL
+    Value: !GetAtt FeelingPaletteApi.ApiEndpoint
+  ApiId:
+    Description: HTTP API ID (for custom domain mapping)
+    Value: !Ref FeelingPaletteApi
+  FunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt FeelingPaletteFunction.Arn

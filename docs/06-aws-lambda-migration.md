@@ -325,76 +325,94 @@ CLI 대신 Console을 쓰려면:
 
 ⚠️ 컷오버 전날 TTL을 300초로 낮춰두면 롤백 빠름.
 
-## Phase 2: AWS SAM IaC (예정)
+## Phase 2: AWS SAM IaC (완료)
 
-Console 클릭으로 만든 리소스를 `template.yaml`로 코드화.
+Console 클릭으로 만든 리소스를 `template.yaml`로 코드화 완료. 실제 진행 절차는 아래.
 
-### 설치
+### 2.1 SAM CLI 설치
 ```bash
 brew install aws-sam-cli
-sam --version
+sam --version   # 1.158.0+
 ```
 
-### `template.yaml` (프로젝트 루트)
-```yaml
-AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
-
-Parameters:
-  GeminiApiKeyParam:
-    Type: AWS::SSM::Parameter::Value<String>
-    Default: /feeling-palette/gemini-api-key
-    NoEcho: true
-
-Resources:
-  FeelingPaletteFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: feeling-palette-api
-      PackageType: Image
-      ImageUri: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/feeling-palette:latest'
-      Architectures: [x86_64]
-      MemorySize: 512
-      Timeout: 30
-      Environment:
-        Variables:
-          GEMINI_API_KEY: !Ref GeminiApiKeyParam
-      Events:
-        Analyze:
-          Type: HttpApi
-          Properties:
-            ApiId: !Ref FeelingPaletteApi
-            Path: /api/diary/analyze
-            Method: POST
-
-  FeelingPaletteApi:
-    Type: AWS::Serverless::HttpApi
-    Properties:
-      StageName: $default
-
-Outputs:
-  ApiEndpoint:
-    Value: !GetAtt FeelingPaletteApi.ApiEndpoint
-```
-
-### SSM에 키 이전
+### 2.2 SSM SecureString 저장
 ```bash
 aws ssm put-parameter \
   --name /feeling-palette/gemini-api-key \
-  --value "AIzaSy..." \
+  --value "AQ.Ab8RN6..." \
   --type SecureString \
   --region ap-northeast-2
 ```
 
-### 배포
+### 2.3 template.yaml (프로젝트 루트)
+
+`template.yaml` 파일 참조. 핵심:
+- `AWS::Serverless::Function` (container image)
+- `AWS::Serverless::HttpApi`
+- `AWS::Logs::LogGroup` (retention 7일)
+- `GeminiApiKey`를 NoEcho CloudFormation Parameter로 받음
+
+### 2.4 CloudFormation 제약 주의
+
+**Lambda 환경변수에서 `{{resolve:ssm-secure:...}}` dynamic reference 사용 불가.**
+해결: 배포 명령어에서 SSM값을 직접 가져와 `--parameter-overrides`로 전달.
+
+### 2.5 기존 Console 리소스 teardown
+
+SAM이 동일 이름 리소스를 생성하므로 먼저 제거:
 ```bash
-sam deploy --template-file template.yaml \
+# API mapping 제거 (커스텀 도메인은 유지)
+aws apigatewayv2 delete-api-mapping \
+  --domain-name feeling-api-aws.sedoli.co.kr \
+  --api-mapping-id <mapping-id> \
+  --region ap-northeast-2
+
+# HTTP API + Lambda + Log group 삭제
+aws apigatewayv2 delete-api --api-id <old-api-id> --region ap-northeast-2
+aws lambda delete-function --function-name feeling-palette-api --region ap-northeast-2
+aws logs delete-log-group --log-group-name /aws/lambda/feeling-palette-api --region ap-northeast-2
+```
+
+### 2.6 배포
+
+```bash
+IMAGE_URI=811821010182.dkr.ecr.ap-northeast-2.amazonaws.com/feeling-palette:latest
+GEMINI_KEY=$(aws ssm get-parameter \
+  --name /feeling-palette/gemini-api-key \
+  --with-decryption \
+  --region ap-northeast-2 \
+  --query 'Parameter.Value' --output text)
+
+sam deploy \
+  --template-file template.yaml \
   --stack-name feeling-palette \
+  --region ap-northeast-2 \
   --capabilities CAPABILITY_IAM \
+  --parameter-overrides ImageUri=$IMAGE_URI GeminiApiKey=$GEMINI_KEY \
+  --resolve-s3 \
+  --resolve-image-repos \
+  --no-confirm-changeset \
+  --no-fail-on-empty-changeset
+```
+
+배포 후 Outputs에서 새 HTTP API ID 확인.
+
+### 2.7 커스텀 도메인 재매핑
+
+SAM이 새 HTTP API를 생성하므로 커스텀 도메인에 다시 연결:
+```bash
+aws apigatewayv2 create-api-mapping \
+  --domain-name feeling-api-aws.sedoli.co.kr \
+  --api-id <new-api-id> \
+  --stage '$default' \
   --region ap-northeast-2
 ```
 
-Phase 1 수동 리소스는 teardown 후 SAM이 재생성. 커스텀 도메인 매핑만 Console에서 재연결.
+전파 1~5분 후 `https://feeling-api-aws.sedoli.co.kr/api/diary/analyze` 정상 동작.
+
+### 이후 배포
+
+이미지만 새로 빌드/푸시한 뒤 동일한 `sam deploy` 재실행하면 됨. Infrastructure 변경 없이 코드만 바뀌면 Lambda만 업데이트됨.
 
 ## Phase 3: GitHub Actions CI/CD (예정)
 
@@ -507,7 +525,7 @@ TTL 300이면 5분 내 복구.
 - [x] Phase 1.5: 테스트 성공
 - [x] Phase 1.6: API Gateway HTTP API (`prla2b674h.execute-api.ap-northeast-2.amazonaws.com`)
 - [x] Phase 1.7: 커스텀 도메인 연결 (`feeling-api-aws.sedoli.co.kr` — 병행 운영)
-- [ ] Phase 2: SAM IaC
+- [x] Phase 2: SAM IaC (`template.yaml` 작성 및 `sam deploy` 완료)
 - [ ] Phase 3: GitHub Actions CI/CD
 
 ## 현재 엔드포인트
