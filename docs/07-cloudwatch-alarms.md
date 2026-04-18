@@ -280,23 +280,62 @@ done
 
 (주의: 400은 `Errors` 지표로 안 잡힘. Lambda 런타임 에러만 잡힘.)
 
-### 방법 C: CLI로 알람 상태 강제 세팅 (가장 확실)
+### 방법 C: CLI로 알람 상태 강제 세팅 (가장 확실) ✅ 실제 테스트 검증됨
+
 ```bash
+# 1) 알람 발동
 aws cloudwatch set-alarm-state \
   --alarm-name feeling-palette-error-rate \
   --state-value ALARM \
-  --state-reason "Manual test" \
+  --state-reason "Manual test — verifying email delivery" \
   --region ap-northeast-2
 ```
 
-수 초 내 이메일 도착. 확인 후 원상 복구:
+수 초 내 이메일 도착. 실제로 수신된 이메일 본문 예시:
+
+```
+You are receiving this email because your Amazon CloudWatch Alarm
+"feeling-palette-error-rate" in the Asia Pacific (Seoul) region has
+entered the ALARM state, because "Manual test — verifying email delivery"
+at "Saturday 18 April, 2026 01:32:20 UTC".
+
+Alarm Details:
+- Name:        feeling-palette-error-rate
+- Description: Lambda error rate above 5% over 5 minutes
+- State Change: OK -> ALARM
+- Reason for State Change: Manual test — verifying email delivery
+- Timestamp:   Saturday 18 April, 2026 01:32:20 UTC
+- AWS Account: 811821010182
+
+Monitored Metrics:
+- MetricExpression: IF(invocations > 0, 100 * errors / invocations, 0)
+- MetricLabel:      ErrorRate
+
+State Change Actions:
+- OK:    [arn:aws:sns:ap-northeast-2:811821010182:feeling-palette-alerts]
+- ALARM: [arn:aws:sns:ap-northeast-2:811821010182:feeling-palette-alerts]
+```
+
+이메일 제목: **"ALARM: feeling-palette-error-rate in Asia Pacific (Seoul)"**
+
+확인 후 원상 복구:
 ```bash
+# 2) 정상 상태로 복구 (OK 알림 이메일도 한 번 더 옴 — OKActions 설정 덕)
 aws cloudwatch set-alarm-state \
   --alarm-name feeling-palette-error-rate \
   --state-value OK \
-  --state-reason "Test complete" \
+  --state-reason "Test complete — manual reset" \
   --region ap-northeast-2
 ```
+
+복구 시 이메일 제목: **"OK: feeling-palette-error-rate in Asia Pacific (Seoul)"**
+
+### 테스트 시 주의사항
+
+- **강제 세팅한 상태는 일시적**: 다음 지표 수집 주기(5분)가 되면 실제 데이터에 따라 재평가됨. 수동으로 OK 복구하지 않아도 자연스럽게 정상화됨.
+- **이메일 지연**: 평소 즉시 오지만 가끔 1~2분 지연 가능. 5분 지나도 안 오면 SNS 구독 상태 재확인.
+- **OK 알림도 받고 싶지 않으면**: template.yaml의 `OKActions` 라인 제거 후 재배포.
+- **비용 걱정 없음**: 이 테스트로 발생하는 SNS 이메일 2건(ALARM + OK)은 월 1,000건 무료 티어 안.
 
 ---
 
