@@ -35,6 +35,12 @@ Resources:
             ApiId: !Ref FeelingPaletteApi
             Path: /api/diary/analyze
             Method: POST
+        Catchall:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref FeelingPaletteApi
+            Path: /{proxy+}
+            Method: ANY
 
   FeelingPaletteApi:
     Type: AWS::Serverless::HttpApi
