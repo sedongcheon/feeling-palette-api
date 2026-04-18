@@ -15,6 +15,7 @@ FastAPI + LangChain + Gemini 기반으로 일기 텍스트를 감정 분석합�
 | 06 | [AWS Lambda 마이그레이션](06-aws-lambda-migration.md) | ECR, Lambda(arm64), API Gateway, 커스텀 도메인, SAM IaC, GitHub Actions CI/CD |
 | 07 | [CloudWatch 알람](07-cloudwatch-alarms.md) | SNS + CloudWatch 알람을 SAM으로 관리, 에러율/응답시간 모니터링 |
 | 08 | [API Throttling](08-api-throttling.md) | Token Bucket 기반 요청 제한, Lambda 동시 제한과의 관계 |
+| 09 | [월간 감정 요약 기능](09-month-summary-feature.md) | /api/month/summarize 프롬프트 설계, 튜닝 가이드, 프롬프트 주입 방어 |
 
 ## 빠른 시작
 
