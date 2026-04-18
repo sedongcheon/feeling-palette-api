@@ -53,7 +53,7 @@ jobs:
         with:
           use-installer: true
 
-      - name: Fetch secrets from SSM
+      - name: Fetch Gemini API key from SSM
         run: |
           KEY=$(aws ssm get-parameter \
             --name /feeling-palette/gemini-api-key \
@@ -64,15 +64,6 @@ jobs:
           echo "::add-mask::$KEY"
           echo "GEMINI_API_KEY=$KEY" >> "$GITHUB_ENV"
 
-          TOKEN=$(aws ssm get-parameter \
-            --name /feeling-palette/api-auth-token \
-            --with-decryption \
-            --region ${{ env.AWS_REGION }} \
-            --query 'Parameter.Value' \
-            --output text)
-          echo "::add-mask::$TOKEN"
-          echo "API_AUTH_TOKEN=$TOKEN" >> "$GITHUB_ENV"
-
       - name: SAM deploy
         run: |
           sam deploy \
@@ -80,7 +71,7 @@ jobs:
             --stack-name ${{ env.STACK_NAME }} \
             --region ${{ env.AWS_REGION }} \
             --capabilities CAPABILITY_IAM \
-            --parameter-overrides ImageUri=$IMAGE_URI GeminiApiKey=$GEMINI_API_KEY ApiAuthToken=$API_AUTH_TOKEN \
+            --parameter-overrides ImageUri=$IMAGE_URI GeminiApiKey=$GEMINI_API_KEY \
             --image-repository ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
             --resolve-s3 \
             --no-confirm-changeset \
@@ -92,7 +83,6 @@ jobs:
             sleep 5
             response=$(curl -sS -X POST "https://${{ env.CUSTOM_DOMAIN }}/api/diary/analyze" \
               -H 'Content-Type: application/json' \
-              -H "Authorization: Bearer $API_AUTH_TOKEN" \
               -d '{"content":"배포 확인"}' || true)
             echo "attempt $i: $response"
             echo "$response" | grep -q '"primary_emotion"' && echo "smoke test passed" && exit 0

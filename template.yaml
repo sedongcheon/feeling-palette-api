@@ -10,10 +10,6 @@ Parameters:
     Type: String
     NoEcho: true
     Description: Gemini API key (fetched from SSM SecureString at deploy time)
-  ApiAuthToken:
-    Type: String
-    NoEcho: true
-    Description: Bearer token required for API calls (fetched from SSM SecureString at deploy time)
   AlertEmail:
     Type: String
     Default: sedong1000@gmail.com
@@ -32,7 +28,6 @@ Resources:
       Environment:
         Variables:
           GEMINI_API_KEY: !Ref GeminiApiKey
-          API_AUTH_TOKEN: !Ref ApiAuthToken
       Events:
         Analyze:
           Type: HttpApi
