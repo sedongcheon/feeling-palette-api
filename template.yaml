@@ -40,6 +40,9 @@ Resources:
     Type: AWS::Serverless::HttpApi
     Properties:
       StageName: $default
+      DefaultRouteSettings:
+        ThrottlingRateLimit: 10       # 초당 평균 10 requests
+        ThrottlingBurstLimit: 20      # 순간 최대 20 requests
 
   FeelingPaletteFunctionLogGroup:
     Type: AWS::Logs::LogGroup
