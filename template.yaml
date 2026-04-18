@@ -10,6 +10,10 @@ Parameters:
     Type: String
     NoEcho: true
     Description: Gemini API key (fetched from SSM SecureString at deploy time)
+  AlertEmail:
+    Type: String
+    Default: sedong1000@gmail.com
+    Description: Email to receive CloudWatch alarm notifications
 
 Resources:
   FeelingPaletteFunction:
@@ -43,6 +47,80 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${FeelingPaletteFunction}
       RetentionInDays: 7
 
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: feeling-palette-alerts
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+
+  # Lambda 에러율 > 5% (5분간 1회 이상 발생)
+  ErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: feeling-palette-error-rate
+      AlarmDescription: Lambda error rate above 5% over 5 minutes
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref AlertTopic
+      OKActions:
+        - !Ref AlertTopic
+      Metrics:
+        - Id: errorRate
+          Expression: IF(invocations > 0, 100 * errors / invocations, 0)
+          Label: ErrorRate
+          ReturnData: true
+        - Id: errors
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Errors
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref FeelingPaletteFunction
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: invocations
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Invocations
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref FeelingPaletteFunction
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  # Lambda timeout 임박 감지 (30초 제한 중 25초 이상 소요)
+  DurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: feeling-palette-duration
+      AlarmDescription: Lambda p99 duration above 25 seconds (near 30s timeout)
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref AlertTopic
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FeelingPaletteFunction
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 25000
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
 Outputs:
   ApiEndpoint:
     Description: Default API Gateway invoke URL
@@ -53,3 +131,6 @@ Outputs:
   FunctionArn:
     Description: Lambda function ARN
     Value: !GetAtt FeelingPaletteFunction.Arn
+  AlertTopicArn:
+    Description: SNS topic ARN for alarm notifications
+    Value: !Ref AlertTopic

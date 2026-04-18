@@ -18,6 +18,7 @@ Synology NAS 배포 → AWS Lambda + API Gateway로 전환하는 가이드.
 ## 핵심 설계 결정
 
 - **배포 형태**: Lambda **container image** (zip X, 250MB 제한 초과)
+- **Architecture**: **arm64** (Graviton2, x86_64 대비 ~20% 저렴)
 - **API**: **API Gateway HTTP API v2** (REST API 대비 50% 저렴)
 - **Region**: **ap-northeast-2 (Seoul)**
 - **IaC**: Phase 1 수동 Console, Phase 2 AWS SAM, Phase 3 GitHub Actions
@@ -52,9 +53,9 @@ CMD ["lambda_handler.handler"]
 ### 1.2 로컬 테스트 (Lambda RIE)
 
 ```bash
-# Apple Silicon이면 반드시 --platform linux/amd64
+# Apple Silicon이면 반드시 --platform linux/arm64
 # --provenance=false 필수 (Lambda는 OCI manifest list 미지원)
-docker buildx build --platform linux/amd64 --provenance=false -f Dockerfile.lambda -t feeling-palette-lambda:local .
+docker buildx build --platform linux/arm64 --provenance=false -f Dockerfile.lambda -t feeling-palette-lambda:local .
 
 docker run -d --name lambda-test -p 9000:8080 \
   -e GEMINI_API_KEY="$(grep GEMINI_API_KEY .env | cut -d= -f2)" \
@@ -121,7 +122,7 @@ aws ecr list-images --repository-name feeling-palette --region $REGION
 3. 설정:
    - Function name: `feeling-palette-api`
    - Container image URI: **Browse images** → `feeling-palette:latest`
-   - Architecture: **x86_64** (빌드 시 amd64로 했다면)
+   - Architecture: **arm64** (빌드 시 linux/arm64로 했다면 — 저렴한 쪽 권장)
    - Permissions: **Create a new role with basic Lambda permissions**
 4. **Create function**
 
@@ -474,7 +475,7 @@ aws iam put-role-policy \
 
 핵심 동작:
 1. `actions/checkout@v4` + OIDC 인증 (`configure-aws-credentials@v4`)
-2. ECR 로그인 → Docker buildx로 `linux/amd64` + `--provenance=false` 빌드 → `:sha`와 `:latest` 둘 다 push
+2. ECR 로그인 → Docker buildx로 `linux/arm64` + `--provenance=false` 빌드 → `:sha`와 `:latest` 둘 다 push
 3. SSM에서 Gemini API key 복호화 읽기 (`::add-mask::`로 로그 마스킹)
 4. `sam deploy` (with `--image-repository` 필수)
 5. Smoke test: `feeling-api-aws.sedoli.co.kr` curl 5회 재시도
@@ -520,7 +521,7 @@ Year 2 이후: 약 $0.15~0.20/월.
 
 ## 주의사항
 
-1. **Apple Silicon 빌드**: `--platform linux/amd64` 필수
+1. **Apple Silicon 빌드**: `--platform linux/arm64` 필수
 2. **Cold start**: 첫 요청 2~4초. 메모리 1024MB로 올리면 절반 단축
 3. **컨테이너만 사용**: zip 250MB 제한 초과
 4. **ACM 리전**: HTTP API Regional → 같은 리전 (ap-northeast-2)
@@ -532,7 +533,7 @@ Year 2 이후: 약 $0.15~0.20/월.
 
 | 증상 | 원인 | 해결 |
 |------|------|------|
-| `exec format error` | 아키텍처 불일치 | `--platform linux/amd64` 필수 |
+| `exec format error` | 아키텍처 불일치 | `--platform linux/arm64` 필수 |
 | `image manifest ... is not supported` | buildx OCI manifest list | `--provenance=false` 추가 |
 | `KeyError: 'sourceIp'` | Lambda 이벤트 형식 오류 | requestContext.http.sourceIp 포함 |
 | Cold start 오래 걸림 | 메모리 부족 | 512 → 1024 MB |
@@ -569,6 +570,7 @@ TTL 300이면 5분 내 복구.
 - [x] Phase 1.7: 커스텀 도메인 연결 (`feeling-api-aws.sedoli.co.kr` — 병행 운영)
 - [x] Phase 2: SAM IaC (`template.yaml` 작성 및 `sam deploy` 완료)
 - [x] Phase 3: GitHub Actions CI/CD (OIDC + 자동 배포)
+- [x] arm64 전환 (Graviton2, ~20% 비용 절감)
 
 ## 현재 엔드포인트
 
