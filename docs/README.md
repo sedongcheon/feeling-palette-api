@@ -14,6 +14,7 @@ FastAPI + LangChain + Gemini 기반으로 일기 텍스트를 감정 분석합�
 | 05 | [AWS 계정 설정](05-aws-setup.md) | 계정 생성, IAM, MFA, CLI, Budget 알람 |
 | 06 | [AWS Lambda 마이그레이션](06-aws-lambda-migration.md) | ECR, Lambda(arm64), API Gateway, 커스텀 도메인, SAM IaC, GitHub Actions CI/CD |
 | 07 | [CloudWatch 알람](07-cloudwatch-alarms.md) | SNS + CloudWatch 알람을 SAM으로 관리, 에러율/응답시간 모니터링 |
+| 08 | [API Throttling](08-api-throttling.md) | Token Bucket 기반 요청 제한, Lambda 동시 제한과의 관계 |
 
 ## 빠른 시작
 
