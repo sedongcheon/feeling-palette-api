@@ -42,3 +42,37 @@ class SummarizeResponse(BaseModel):
         default=None,
         description="월 전체를 통틀어 가장 두드러진 감정 (애매하면 null)",
     )
+
+
+TrendKey = Literal["up", "down", "stable", "mixed"]
+ConfidenceKey = Literal["low", "medium", "high"]
+
+
+class WeeklyInsightRequest(BaseModel):
+    anchor_date: str = Field(
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="기준 날짜 (YYYY-MM-DD). 보통 생성 시점의 오늘 날짜.",
+    )
+    entries: List[EntryIn] = Field(
+        description="기준 날짜 이전 최근 30일(또는 그 이하)에 작성된 일기 목록",
+    )
+
+
+class WeeklyInsightResponse(BaseModel):
+    insight_text: str = Field(
+        description="사용자에게 보여줄 한국어 인사이트 (2~3문장, 공백 포함 80~180자)",
+    )
+    trend: TrendKey = Field(
+        description="감정 흐름: up(상승), down(하강), stable(안정), mixed(혼재)",
+    )
+    keyword: Optional[str] = Field(
+        default=None,
+        description="인사이트의 핵심 키워드 1개 (회사, 가족 등). 딱히 없으면 null",
+    )
+    confidence: ConfidenceKey = Field(
+        description="신뢰도: low(데이터 부족), medium, high(패턴 명확)",
+    )
+    care_flag: bool = Field(
+        default=False,
+        description="자해·극단적 선택 암시가 감지되면 true. insight_text에는 1393 안내가 포함되어 있어야 함.",
+    )
