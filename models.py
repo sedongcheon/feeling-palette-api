@@ -3,10 +3,12 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 EmotionKey = Literal["joy", "sadness", "anger", "anxiety", "calm", "excitement"]
+LocaleKey = Literal["ko", "en"]
 
 
 class AnalyzeRequest(BaseModel):
     content: str
+    locale: LocaleKey = Field(default="ko", description="응답 언어 (ko: 한국어, en: 영어)")
 
 
 class EmotionScores(BaseModel):
@@ -34,6 +36,7 @@ class EntryIn(BaseModel):
 class SummarizeRequest(BaseModel):
     year_month: str = Field(pattern=r"^\d{4}-\d{2}$", description="요약 대상 월 (YYYY-MM)")
     entries: List[EntryIn] = Field(description="해당 월에 작성된 일기 목록")
+    locale: LocaleKey = Field(default="ko", description="응답 언어 (ko: 한국어, en: 영어)")
 
 
 class SummarizeResponse(BaseModel):
@@ -56,6 +59,7 @@ class WeeklyInsightRequest(BaseModel):
     entries: List[EntryIn] = Field(
         description="기준 날짜 이전 최근 30일(또는 그 이하)에 작성된 일기 목록",
     )
+    locale: LocaleKey = Field(default="ko", description="응답 언어 (ko: 한국어, en: 영어)")
 
 
 class WeeklyInsightResponse(BaseModel):

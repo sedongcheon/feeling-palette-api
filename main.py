@@ -30,7 +30,7 @@ async def analyze(request: AnalyzeRequest):
         return JSONResponse(status_code=400, content={"error": "일기 내용은 1000자 이하로 작성해주세요."})
 
     try:
-        result = await analyze_diary(content)
+        result = await analyze_diary(content, request.locale)
         return result
     except Exception:
         logger.exception("Diary analysis request failed")
@@ -43,7 +43,7 @@ async def summarize(request: SummarizeRequest):
         return JSONResponse(status_code=400, content={"error": "entries가 비어있습니다."})
 
     try:
-        result = await summarize_month(request.year_month, request.entries)
+        result = await summarize_month(request.year_month, request.entries, request.locale)
         return result
     except Exception:
         logger.exception("Month summarize request failed")
@@ -56,7 +56,7 @@ async def insights_weekly(request: WeeklyInsightRequest):
         return JSONResponse(status_code=400, content={"error": "entries가 비어있습니다."})
 
     try:
-        result = await weekly_insight(request.anchor_date, request.entries)
+        result = await weekly_insight(request.anchor_date, request.entries, request.locale)
         return result
     except Exception:
         logger.exception("Weekly insight request failed")
