@@ -99,7 +99,7 @@ MONTH_SUMMARY_LOCALE_EN_OVERRIDE = """
 
 [Locale override — write output in English]
 - THIS BLOCK SUPERSEDES every "한국어" / "Korean" requirement in the base prompt above AND in the response schema field descriptions. All free-text fields MUST be written in English; ignore any earlier instruction that says otherwise.
-- Write `summary` in warm, empathetic English, 2~4 sentences, 100~250 characters including spaces.
+- Write `summary` in warm, empathetic English, 2~4 sentences. HARD CAP: 250 characters including spaces (target 180~240). Before returning JSON, count the characters of your drafted `summary`; if it exceeds 250, REWRITE it shorter before responding. Trim filler aggressively ("It seems that...", "you found yourself...", abstract closers like "amidst the busyness"). The cap is waived only for the 1393-trigger sentence described below.
 - The "-요체" / Korean sentence-ending rule does not apply. Keep a consistent, gentle observational tone throughout instead.
 - Do NOT mention "1393". If the 1393-trigger conditions are met, append this sentence in English instead: "If carrying this feels too heavy, please consider reaching out to someone you trust or a local crisis helpline." (The 250-char cap is waived in this case.)
 - `dominant_emotion` key stays as the same emotion identifier (joy/sadness/anger/anxiety/calm/excitement/null)."""
@@ -192,6 +192,41 @@ MAX_CONTENT_CHARS = 400
 WEEKLY_MAX_ENTRIES = 60
 
 
+SUMMARY_HARD_CAP = 250
+_CAP_EXEMPT_MARKERS = ("1393", "crisis helpline")
+
+
+def _clip_to_sentence(text: str, max_chars: int) -> str:
+    if len(text) <= max_chars:
+        return text
+    window = text[:max_chars]
+    best = -1
+    for sep in (". ", "? ", "! ", ".\n", "?\n", "!\n"):
+        idx = window.rfind(sep)
+        if idx > best:
+            best = idx
+    if best > 0:
+        return text[: best + 1].rstrip()
+    space = window.rfind(" ")
+    if space > 0:
+        return text[:space].rstrip(",;:") + "…"
+    return window
+
+
+def _enforce_summary_cap(result: "SummarizeResponse") -> "SummarizeResponse":
+    if len(result.summary) <= SUMMARY_HARD_CAP:
+        return result
+    if any(marker in result.summary for marker in _CAP_EXEMPT_MARKERS):
+        return result
+    clipped = _clip_to_sentence(result.summary, SUMMARY_HARD_CAP)
+    logger.warning(
+        "Month summary exceeded hard cap (%d > %d), clipped to %d chars",
+        len(result.summary), SUMMARY_HARD_CAP, len(clipped),
+    )
+    result.summary = clipped
+    return result
+
+
 def build_entries_block(entries: List[EntryIn]) -> str:
     # 날짜순 정렬 (안 되어 있을 수 있음)
     ordered = sorted(entries, key=lambda e: e.date)
@@ -231,7 +266,7 @@ async def summarize_month(
 
     try:
         result = await structured_llm.ainvoke(messages)
-        return result
+        return _enforce_summary_cap(result)
     except Exception:
         logger.exception("Structured month summary failed; attempting fallback response parsing")
         fallback_prompt = (
@@ -246,7 +281,7 @@ async def summarize_month(
             # dominant_emotion이 문자열 "null"로 올 수도 있어 None으로 정규화
             if data.get("dominant_emotion") == "null":
                 data["dominant_emotion"] = None
-            return SummarizeResponse(**data)
+            return _enforce_summary_cap(SummarizeResponse(**data))
         except Exception:
             logger.exception("Fallback month summary failed")
             raise
