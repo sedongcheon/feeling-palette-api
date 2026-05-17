@@ -40,7 +40,7 @@ class SummarizeRequest(BaseModel):
 
 
 class SummarizeResponse(BaseModel):
-    summary: str = Field(description="한국어 월간 요약 (2~4문장, 100~250자)")
+    summary: str = Field(description="월간 요약 (2~4문장, 100~250자). 출력 언어는 system prompt의 locale 규칙을 따름.")
     dominant_emotion: Optional[EmotionKey] = Field(
         default=None,
         description="월 전체를 통틀어 가장 두드러진 감정 (애매하면 null)",
@@ -64,7 +64,7 @@ class WeeklyInsightRequest(BaseModel):
 
 class WeeklyInsightResponse(BaseModel):
     insight_text: str = Field(
-        description="사용자에게 보여줄 한국어 인사이트 (2~3문장, 공백 포함 80~180자)",
+        description="사용자에게 보여줄 인사이트 (2~3문장, 공백 포함 80~180자). 출력 언어는 system prompt의 locale 규칙을 따름.",
     )
     trend: TrendKey = Field(
         description="감정 흐름: up(상승), down(하강), stable(안정), mixed(혼재)",

@@ -98,6 +98,7 @@ MONTH_SUMMARY_SYSTEM_PROMPT = """당신은 사용자의 한 달치 감정 일기
 MONTH_SUMMARY_LOCALE_EN_OVERRIDE = """
 
 [Locale override — write output in English]
+- THIS BLOCK SUPERSEDES every "한국어" / "Korean" requirement in the base prompt above AND in the response schema field descriptions. All free-text fields MUST be written in English; ignore any earlier instruction that says otherwise.
 - Write `summary` in warm, empathetic English, 2~4 sentences, 100~250 characters including spaces.
 - The "-요체" / Korean sentence-ending rule does not apply. Keep a consistent, gentle observational tone throughout instead.
 - Do NOT mention "1393". If the 1393-trigger conditions are met, append this sentence in English instead: "If carrying this feels too heavy, please consider reaching out to someone you trust or a local crisis helpline." (The 250-char cap is waived in this case.)
@@ -175,6 +176,7 @@ WEEKLY_INSIGHT_SYSTEM_PROMPT = """당신은 사용자의 최근 30일치 감정 
 WEEKLY_INSIGHT_LOCALE_EN_OVERRIDE = """
 
 [Locale override — write output in English]
+- THIS BLOCK SUPERSEDES every "한국어" / "Korean" requirement in the base prompt above AND in the response schema field descriptions. All free-text fields MUST be written in English; ignore any earlier instruction that says otherwise.
 - Write `insight_text` in warm, gentle English with a polite tone, 2~3 sentences, 80~180 characters including spaces.
 - Use observational phrasing ("It seems...", "I've noticed...", "There appears to be...") instead of declarative statements.
 - Time markers map as: "이번 주" → "this week", "최근 N주간" → "over the past N weeks", "요즘" → "lately".
