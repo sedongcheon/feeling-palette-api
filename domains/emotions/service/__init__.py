@@ -4,8 +4,13 @@ from typing import List
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from config import llm, llm_summary
-from models import AnalyzeResponse, EntryIn, SummarizeResponse, WeeklyInsightResponse
+from domains.emotions.config import llm, llm_summary
+from domains.emotions.types import (
+    AnalyzeResponse,
+    EntryIn,
+    SummarizeResponse,
+    WeeklyInsightResponse,
+)
 
 logger = logging.getLogger(__name__)
 
