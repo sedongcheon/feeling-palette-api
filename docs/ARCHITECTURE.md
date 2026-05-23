@@ -13,15 +13,17 @@ apps/api/
   lambda_handler.py  Mangum adapter (AWS Lambda)
 domains/emotions/
   types/             Pydantic request + response models
-  config/            Two LangChain LLM instances (Gemini)
+  config/            Three LangChain LLM instances (Gemini)
   service/           Korean system prompts + LLM orchestration
-                     (analyze_diary / summarize_month / weekly_insight)
+                     (analyze_diary / summarize_month / weekly_insight /
+                      analyze_journal)
   ui/
-    routes.py        FastAPI APIRouter — 3 POST endpoints, input
+    routes.py        FastAPI APIRouter — 4 POST endpoints, input
                      validation, error envelopes
+tests/               pytest coverage for /api/v1/journal/analyze (only)
 ```
 
-Currently one domain (`emotions`), three endpoints all backed by the same
+Currently one domain (`emotions`), four endpoints all backed by the same
 LLM provider. A second domain would live under `domains/<name>/` with the
 same layer split.
 
@@ -71,8 +73,10 @@ update this file in the same PR.
 - **No `providers/`, `packages/`, `ops/` top-level dirs yet.** Add them
   when there's real content to put in them — empty scaffolding is a
   smell.
-- **No automated tests.** Verification is manual via `/docs` Swagger UI.
-  See [RELIABILITY.md](RELIABILITY.md) for what to verify after a change.
+- **Tests are scoped to one endpoint.** Only `/api/v1/journal/analyze`
+  has pytest coverage (`tests/test_journal_analyze.py`, mocking the LLM).
+  Other endpoints are verified manually via `/docs` Swagger UI. See
+  [RELIABILITY.md](RELIABILITY.md) for what to verify after a change.
 
 ## Deployment shape
 

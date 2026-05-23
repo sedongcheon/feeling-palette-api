@@ -3,9 +3,15 @@ import logging
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from domains.emotions.service import analyze_diary, summarize_month, weekly_insight
+from domains.emotions.service import (
+    analyze_diary,
+    analyze_journal,
+    summarize_month,
+    weekly_insight,
+)
 from domains.emotions.types import (
     AnalyzeRequest,
+    JournalAnalyzeRequest,
     SummarizeRequest,
     WeeklyInsightRequest,
 )
@@ -57,3 +63,30 @@ async def insights_weekly(request: WeeklyInsightRequest):
     except Exception:
         logger.exception("Weekly insight request failed")
         return JSONResponse(status_code=500, content={"error": "주간 인사이트 생성 중 오류가 발생했습니다."})
+
+
+@router.post("/api/v1/journal/analyze")
+async def journal_analyze(request: JournalAnalyzeRequest):
+    text = request.anonymized_text.strip()
+    if not text:
+        return JSONResponse(status_code=400, content={"error": "anonymized_text가 비어있습니다."})
+    if not request.user_id_hash.strip():
+        return JSONResponse(status_code=400, content={"error": "user_id_hash가 비어있습니다."})
+
+    user_hash_short = request.user_id_hash[:8]
+    logger.info("journal.analyze.start user_hash=%s len=%d", user_hash_short, len(text))
+
+    try:
+        result = await analyze_journal(text)
+    except Exception:
+        logger.exception("journal.analyze.failed user_hash=%s", user_hash_short)
+        return JSONResponse(
+            status_code=502,
+            content={"error": "AI 분석 일시 실패", "retryable": True},
+        )
+
+    logger.info(
+        "journal.analyze.done user_hash=%s emotions=%d intensity=%.2f",
+        user_hash_short, len(result.emotions), result.intensity_score,
+    )
+    return result

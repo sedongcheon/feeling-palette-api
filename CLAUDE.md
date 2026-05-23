@@ -1,7 +1,7 @@
 # CLAUDE.md — Feeling Palette API entry point
 
 > **Mission.** A Korean emotion-analysis API. Diaries in, structured emotion
-> data + warm Korean comment out. Three endpoints, one LLM provider (Gemini
+> data + warm Korean comment out. Four endpoints, one LLM provider (Gemini
 > via LangChain), deployed to NAS (Docker) and AWS Lambda (SAM).
 >
 > **Operating principle.** Humans steer. Agents execute. Keep the surface
@@ -19,10 +19,11 @@ Keep this file under ~120 lines.
    `ui` router and uses domain types at the boundary. See
    [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 2. **Parse at the boundary.** Every endpoint accepts a Pydantic request
-   model (`AnalyzeRequest` / `SummarizeRequest` / `WeeklyInsightRequest`);
-   every LLM call uses `llm.with_structured_output(...)` with a Pydantic
-   response model and falls back to raw JSON parsing. No untyped dicts
-   crossing the service boundary. See [docs/RELIABILITY.md](docs/RELIABILITY.md).
+   model (`AnalyzeRequest` / `SummarizeRequest` / `WeeklyInsightRequest` /
+   `JournalAnalyzeRequest`); every LLM call uses
+   `llm.with_structured_output(...)` with a Pydantic response model and
+   falls back to raw JSON parsing. No untyped dicts crossing the service
+   boundary. See [docs/RELIABILITY.md](docs/RELIABILITY.md).
 3. **Safety hotline is locale-gated.** `1393` may appear ONLY when
    `locale="ko"` AND a self-harm signal is detected. For `locale="en"` the
    override emits a generic "local crisis helpline" sentence. Never sprinkle
@@ -36,9 +37,11 @@ Keep this file under ~120 lines.
 2. **Execute.** Edit `.py` only inside `apps/` or `domains/`. For changes
    under `ops/`, `Dockerfile*`, `template.yaml`, or any `.md`/`.yml`,
    confirm with the user first.
-3. **Verify by hitting the API.** No test suite. Run
-   `uvicorn apps.api.main:app --reload --port 8080` and hit `/docs`
-   (Swagger UI) for each touched endpoint.
+3. **Verify by hitting the API.** Default is manual via `/docs` Swagger
+   UI (`uvicorn apps.api.main:app --reload --port 8080`). The
+   `/api/v1/journal/analyze` route has pytest coverage
+   (`pip install -r requirements-dev.txt && pytest`); add tests there if
+   you touch its types/service. The other three endpoints stay manual.
 4. **Push to `release/release`.** The user merges to `main` via GitLab
    manually — **do not push to `main`**.
 
@@ -77,9 +80,10 @@ sam build && sam deploy              # uses template.yaml
 apps/api/                  FastAPI app + Lambda adapter
 domains/emotions/
   types/                   Pydantic request/response schemas
-  config/                  Gemini LLM instances (llm, llm_summary)
+  config/                  Gemini LLM instances (llm, llm_summary, llm_journal)
   service/                 Korean system prompts + LLM orchestration
-  ui/                      FastAPI router for the 3 endpoints
+  ui/                      FastAPI router for the 4 endpoints
+tests/                     pytest coverage for /api/v1/journal/analyze (only)
 docs/                      ARCHITECTURE / RELIABILITY / SECURITY / PLANS,
                            plus exec-plans/ and product-specs/
 Dockerfile, Dockerfile.lambda, docker-compose.yml, Jenkinsfile, template.yaml
@@ -91,14 +95,19 @@ Dockerfile, Dockerfile.lambda, docker-compose.yml, Jenkinsfile, template.yaml
   Korean base prompts in `domains/emotions/service/__init__.py` are not
   translated; an `*_LOCALE_EN_OVERRIDE` block is appended for `en`. Extend
   the override, don't rewrite the base.
-- **Emotion→color mapping is fixed** in the analyze system prompt. Never
-  invent new HEX values.
+- **Emotion→color mapping is fixed** for `/api/diary/analyze` (6 emotions
+  → 6 fixed HEX). The `/api/v1/journal/analyze` route intentionally uses a
+  variable palette per the journal prompt's color guidance. Never invent
+  new HEX values for the diary route.
 - **No emojis** in any LLM output.
-- **Input/sampling caps:** `/analyze` rejects content >1000 chars. Month
-  summary truncates at `MAX_ENTRIES=1000` (uniform-step sample) and
-  `MAX_CONTENT_CHARS=400` per entry. Weekly caps at `WEEKLY_MAX_ENTRIES=60`.
-- **LLM model pin.** Both LLMs use `gemini-2.5-flash-lite`. Don't bump
-  without asking — chosen for cost.
+- **Input/sampling caps:** `/api/diary/analyze` rejects content >1000
+  chars. `/api/v1/journal/analyze` rejects `anonymized_text` outside
+  1~3000 chars (Pydantic 422). Month summary truncates at
+  `MAX_ENTRIES=1000` (uniform-step sample) and `MAX_CONTENT_CHARS=400`
+  per entry. Weekly caps at `WEEKLY_MAX_ENTRIES=60`.
+- **LLM model pin.** All three instances (`llm`, `llm_summary`,
+  `llm_journal`) use `gemini-2.5-flash`. Don't bump without asking —
+  chosen for cost.
 - **Prompt-injection defense** lives inside each Korean system prompt —
   preserve it when editing.
 
