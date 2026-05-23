@@ -2,7 +2,8 @@
 
 > **Mission.** A Korean emotion-analysis API. Diaries in, structured emotion
 > data + warm Korean comment out. Four endpoints, one LLM provider (Gemini
-> via LangChain), deployed to NAS (Docker) and AWS Lambda (SAM).
+> via LangChain). **Production = AWS Lambda (SAM).** NAS (Docker) exists
+> as a local / auxiliary container path.
 >
 > **Operating principle.** Humans steer. Agents execute. Keep the surface
 > small; keep the prompts honest.
@@ -68,11 +69,11 @@ source venv/bin/activate
 pip install -r requirements.txt
 uvicorn apps.api.main:app --reload --port 8080
 
-# Container (NAS deploy path)
-docker compose up --build           # exposes :8100 → :8080
-
-# AWS Lambda (SAM)
+# AWS Lambda (SAM) — production deploy. Run yourself; agent never executes.
 sam build && sam deploy              # uses template.yaml
+
+# Container (NAS / local-only)
+docker compose up --build           # exposes :8100 → :8080
 ```
 
 `GEMINI_API_KEY` must be set in `.env` (gitignored).
