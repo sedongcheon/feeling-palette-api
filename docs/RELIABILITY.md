@@ -2,28 +2,32 @@
 
 This service is one LLM call away from a 500. Most reliability work here is
 about being deliberate at the boundaries: caps on input, structured output
-with a fallback, and manual verification because there is no test suite.
+with a fallback, and mostly-manual verification (the journal route has
+pytest coverage; the rest do not).
 
 ## Input caps
 
-| Endpoint                  | Cap                                                  | Where                                    |
-|---------------------------|------------------------------------------------------|------------------------------------------|
-| `POST /api/diary/analyze` | `content` ≤ 1000 chars (rejects with 400)            | `domains/emotions/ui/routes.py`          |
-| `POST /api/month/summarize` | `MAX_ENTRIES = 1000` (uniform-step sampled), `MAX_CONTENT_CHARS = 400` per entry | `domains/emotions/service/__init__.py` |
-| `POST /api/insights/weekly` | `WEEKLY_MAX_ENTRIES = 60` (most recent by date)    | `domains/emotions/service/__init__.py` |
+| Endpoint                       | Cap                                                                              | Where                                    |
+|--------------------------------|----------------------------------------------------------------------------------|------------------------------------------|
+| `POST /api/diary/analyze`      | `content` ≤ 1000 chars (rejects with 400)                                        | `domains/emotions/ui/routes.py`          |
+| `POST /api/month/summarize`    | `MAX_ENTRIES = 1000` (uniform-step sampled), `MAX_CONTENT_CHARS = 400` per entry | `domains/emotions/service/__init__.py`   |
+| `POST /api/insights/weekly`    | `WEEKLY_MAX_ENTRIES = 60` (most recent by date)                                  | `domains/emotions/service/__init__.py`   |
+| `POST /api/v1/journal/analyze` | `anonymized_text` 1~3000 chars (Pydantic 422); whitespace-only → 400             | `domains/emotions/types/__init__.py` + `routes.py` |
 
 These caps exist to keep cost and latency bounded under adversarial input.
 Don't bump them without considering p99 latency and Gemini token cost.
 
 ## LLM provider
 
-- **Model pin:** `gemini-2.5-flash-lite` for both `llm` and `llm_summary`.
-  The flash-lite variant is intentional (cost) — **do not bump without
-  asking.**
-- **Two instances** in `domains/emotions/config/__init__.py`:
-  - `llm` — 512 max output tokens, 30s timeout. Used by `/analyze`.
+- **Model pin:** `gemini-2.5-flash` for all three instances. **Do not bump
+  without asking** — chosen for cost.
+- **Three instances** in `domains/emotions/config/__init__.py`:
+  - `llm` — 512 max output tokens, 30s timeout. Used by `/api/diary/analyze`.
   - `llm_summary` — 2048 max output tokens, 60s timeout. Used by month
     summary and weekly insight (longer Korean output).
+  - `llm_journal` — 1024 max output tokens, 30s timeout. Used by
+    `/api/v1/journal/analyze` (response carries emotions[], themes[],
+    empathy_response, color_reasoning — bigger than `llm`'s 512).
 - **API key:** `GEMINI_API_KEY` env var, loaded via `python-dotenv`
   locally and the deployment platform's secret store otherwise.
 
@@ -63,23 +67,39 @@ If a future endpoint also needs a hard cap, copy the `_clip_to_sentence` +
 
 Each endpoint in `domains/emotions/ui/routes.py`:
 
-- 400 with `{"error": "..."}` for empty content / empty entries / over-cap
-- 500 with `{"error": "..."}` for LLM failures (after both structured and
-  fallback paths raise)
+- 400 with `{"error": "..."}` for empty content / empty entries / empty
+  `user_id_hash` / over-cap (where over-cap isn't already a Pydantic 422)
+- 422 (FastAPI default) for Pydantic validation failures —
+  `/api/v1/journal/analyze` relies on this for the 1~3000 char bound and
+  the hex color pattern on the response
+- 500 with `{"error": "..."}` for LLM failures on the three original
+  endpoints (after both structured and fallback paths raise)
+- 502 with `{"error": "AI 분석 일시 실패", "retryable": true}` for LLM
+  failures on `/api/v1/journal/analyze` — the contract calls out
+  retryability explicitly so the diary client can back off and retry
 
-`logger.exception(...)` is called inside each 500 branch so the stack
-trace lands in CloudWatch / Docker logs.
+`logger.exception(...)` is called inside each failure branch so the
+stack trace lands in CloudWatch / Docker logs.
 
-## Verification (no test suite)
+## Verification
 
-After any change, manually verify:
+The `/api/v1/journal/analyze` route has pytest coverage in
+`tests/test_journal_analyze.py` (happy path with mocked LLM, text-too-long
+422, whitespace-only 400, Gemini-failure 502). Run with:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+For everything else, manually verify:
 
 1. Start `uvicorn apps.api.main:app --reload --port 8080`.
 2. Open `http://localhost:8080/docs`.
 3. For each touched endpoint, run a happy-path request with both
    `locale="ko"` and `locale="en"`.
-4. For `/analyze`: try empty content (expect 400) and a 1001-char string
-   (expect 400).
+4. For `/api/diary/analyze`: try empty content (expect 400) and a
+   1001-char string (expect 400).
 5. For month/weekly: try `entries=[]` (expect 400) and a realistic
    payload.
 
