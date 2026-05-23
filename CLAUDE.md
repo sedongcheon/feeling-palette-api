@@ -100,9 +100,11 @@ Dockerfile, Dockerfile.lambda, docker-compose.yml, Jenkinsfile, template.yaml
   translated; an `*_LOCALE_EN_OVERRIDE` block is appended for `en`. Extend
   the override, don't rewrite the base.
 - **Emotion→color mapping is fixed** for `/api/diary/analyze` (6 emotions
-  → 6 fixed HEX). The `/api/v1/journal/analyze` route intentionally uses a
-  variable palette per the journal prompt's color guidance. Never invent
-  new HEX values for the diary route.
+  → 5-color HEX palette each, defined in `EMOTION_PALETTES`). Response
+  includes both `color` (anchor = `palette[0]`, backward compat) and
+  `palette: List[str]`. The `/api/v1/journal/analyze` route intentionally
+  uses a variable palette per the journal prompt's color guidance. Never
+  invent new HEX values for the diary route — edit the table only.
 - **No emojis** in any LLM output.
 - **Input/sampling caps:** `/api/diary/analyze` rejects content >1000
   chars. `/api/v1/journal/analyze` rejects `anonymized_text` outside

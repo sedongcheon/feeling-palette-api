@@ -199,6 +199,28 @@ MAX_CONTENT_CHARS = 400
 WEEKLY_MAX_ENTRIES = 60
 
 
+# /api/diary/analyze 응답의 palette 필드. 감정별 5색 HEX, 첫 색은 항상
+# 기존 `color` 와 동일한 anchor. anchor + 라이트 + 딥 + 페일 + 뮤트 패턴.
+# 결정론적 매핑이라 LLM 호출 추가 없음. CLAUDE.md 의 "fixed mapping" 원칙
+# 유지 — 임의 HEX 생성 금지, 이 표만 수정.
+EMOTION_PALETTES = {
+    "joy":        ["#FFD700", "#FFE57F", "#FFB300", "#FFEBA1", "#F5A623"],
+    "sadness":    ["#4A90D9", "#7AAEE5", "#2C5F8E", "#B8D4ED", "#5B7C99"],
+    "anger":      ["#E74C3C", "#FF6B5B", "#B83B2C", "#FFAAA0", "#C0392B"],
+    "anxiety":    ["#9B59B6", "#B58CC8", "#6F3D85", "#DBC4E3", "#6B5B95"],
+    "calm":       ["#2ECC71", "#5FD895", "#21955A", "#B6EAC8", "#A8C9A8"],
+    "excitement": ["#FF69B4", "#FF93C7", "#D44A8E", "#FFC1DD", "#F1C0B9"],
+}
+
+
+def palette_for(primary_emotion: str) -> List[str]:
+    """primary_emotion → 5색 HEX. 미지의 라벨은 calm 으로 fallback (로그)."""
+    if primary_emotion in EMOTION_PALETTES:
+        return list(EMOTION_PALETTES[primary_emotion])
+    logger.warning("Unknown primary_emotion %r — falling back to calm palette", primary_emotion)
+    return list(EMOTION_PALETTES["calm"])
+
+
 SUMMARY_HARD_CAP = 250
 _CAP_EXEMPT_MARKERS = ("1393", "crisis helpline")
 
@@ -430,7 +452,6 @@ async def analyze_diary(content: str, locale: str = "ko") -> AnalyzeResponse:
 
     try:
         result = await structured_llm.ainvoke(messages)
-        return result
     except Exception:
         logger.exception("Structured diary analysis failed; attempting fallback response parsing")
         # 구조화 출력 실패 시 일반 호출 후 JSON 파싱으로 폴백
@@ -439,7 +460,11 @@ async def analyze_diary(content: str, locale: str = "ko") -> AnalyzeResponse:
         try:
             response = await llm.ainvoke(messages)
             data = json.loads(response.content)
-            return AnalyzeResponse(**data)
+            result = AnalyzeResponse(**data)
         except Exception:
             logger.exception("Fallback diary analysis failed")
             raise
+
+    if result is not None:
+        result.palette = palette_for(result.primary_emotion)
+    return result
