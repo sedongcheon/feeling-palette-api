@@ -42,8 +42,10 @@ Keep this file under ~120 lines.
    `/api/v1/journal/analyze` route has pytest coverage
    (`pip install -r requirements-dev.txt && pytest`); add tests there if
    you touch its types/service. The other three endpoints stay manual.
-4. **Push to `release/release`.** The user merges to `main` via GitLab
-   manually — **do not push to `main`**.
+4. **Ship via `release/release` → GitHub PR.** Push to `github`, open PR
+   `release/release → main`, `pytest`, merge commit, clean up. Sequence:
+   [docs/RELEASE.md](docs/RELEASE.md). GitLab `main` is user-managed —
+   **do not push to `main`**.
 
 ## Knowledge tree (source of truth)
 
@@ -53,6 +55,7 @@ Keep this file under ~120 lines.
 | Reliability (LLM, caps, fallbacks) | [docs/RELIABILITY.md](docs/RELIABILITY.md)                               |
 | Security (safety hotline, prompt injection) | [docs/SECURITY.md](docs/SECURITY.md)                            |
 | Exec-plan workflow             | [docs/PLANS.md](docs/PLANS.md)                                               |
+| Release flow (PR → merge → cleanup) | [docs/RELEASE.md](docs/RELEASE.md)                                     |
 | Active plans                   | [docs/exec-plans/active/](docs/exec-plans/active/)                           |
 | Emotions domain spec           | [docs/product-specs/emotions.md](docs/product-specs/emotions.md)             |
 | Feature/deploy guides (legacy) | [docs/](docs/) — files `01_*` ~ `09_*`                                       |
@@ -105,16 +108,18 @@ Dockerfile, Dockerfile.lambda, docker-compose.yml, Jenkinsfile, template.yaml
   1~3000 chars (Pydantic 422). Month summary truncates at
   `MAX_ENTRIES=1000` (uniform-step sample) and `MAX_CONTENT_CHARS=400`
   per entry. Weekly caps at `WEEKLY_MAX_ENTRIES=60`.
-- **LLM model pin.** All three instances (`llm`, `llm_summary`,
-  `llm_journal`) use `gemini-2.5-flash`. Don't bump without asking —
-  chosen for cost.
+- **LLM model pin.** All three instances use `gemini-2.5-flash-lite`.
+  Don't bump without asking — `gemini-2.5-flash` was tried but its
+  thinking tokens consume `max_output_tokens` and `with_structured_output`
+  returns `None` (200 OK with `null` body). flash-lite avoids that.
 - **Prompt-injection defense** lives inside each Korean system prompt —
   preserve it when editing.
 
 ## Workflow rules
 
-- Push only to `release/release`. User merges to `main` via GitLab — **do
-  not push to `main`**.
+- Push only to `release/release` on the `github` remote. `origin` (GitLab)
+  is blocked by hookify; user syncs GitLab manually. **Never push to `main`.**
+  Full release sequence: [docs/RELEASE.md](docs/RELEASE.md).
 - AWS CLI / Console commands: **don't execute.** Provide the exact commands
   and let the user run them.
 - Edit `.py` inside `apps/` or `domains/` primarily. For `.md`, `.yml`,

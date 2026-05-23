@@ -19,8 +19,13 @@ Don't bump them without considering p99 latency and Gemini token cost.
 
 ## LLM provider
 
-- **Model pin:** `gemini-2.5-flash` for all three instances. **Do not bump
-  without asking** — chosen for cost.
+- **Model pin:** `gemini-2.5-flash-lite` for all three instances. **Do
+  not bump without asking** — `gemini-2.5-flash` was tried and reverted:
+  its thinking tokens consume the entire `max_output_tokens` budget, so
+  `with_structured_output(...)` returns `None` instead of raising, which
+  the routers used to forward as `200 OK` with body `null`. Existing
+  Flutter clients then crash on deserialization. The router None-guards
+  (below) cover the failure mode, but flash-lite is the actual fix.
 - **Three instances** in `domains/emotions/config/__init__.py`:
   - `llm` — 512 max output tokens, 30s timeout. Used by `/api/diary/analyze`.
   - `llm_summary` — 2048 max output tokens, 60s timeout. Used by month
@@ -73,10 +78,19 @@ Each endpoint in `domains/emotions/ui/routes.py`:
   `/api/v1/journal/analyze` relies on this for the 1~3000 char bound and
   the hex color pattern on the response
 - 500 with `{"error": "..."}` for LLM failures on the three original
-  endpoints (after both structured and fallback paths raise)
+  endpoints (after both structured and fallback paths raise, **or** the
+  service silently returns `None` — see None-guards below)
 - 502 with `{"error": "AI 분석 일시 실패", "retryable": true}` for LLM
   failures on `/api/v1/journal/analyze` — the contract calls out
-  retryability explicitly so the diary client can back off and retry
+  retryability explicitly so the diary client can back off and retry.
+  Applies to both raised exceptions and silent `None` returns.
+
+**Why the None-guard exists.** `with_structured_output(...)` can return
+`None` instead of raising when the model truncates / emits no parseable
+JSON (observed with `gemini-2.5-flash` consuming all tokens on thinking).
+Without the guard, the route returns `200 OK` with body `null`, which
+Flutter clients deserialize as a crash. Every route MUST check
+`if result is None` before returning the service result.
 
 `logger.exception(...)` is called inside each failure branch so the
 stack trace lands in CloudWatch / Docker logs.
