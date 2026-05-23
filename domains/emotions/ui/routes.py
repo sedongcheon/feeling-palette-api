@@ -1,25 +1,21 @@
 import logging
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from models import AnalyzeRequest, SummarizeRequest, WeeklyInsightRequest
-from service import analyze_diary, summarize_month, weekly_insight
+from domains.emotions.service import analyze_diary, summarize_month, weekly_insight
+from domains.emotions.types import (
+    AnalyzeRequest,
+    SummarizeRequest,
+    WeeklyInsightRequest,
+)
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Feeling Palette API")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+router = APIRouter()
 
 
-@app.post("/api/diary/analyze")
+@router.post("/api/diary/analyze")
 async def analyze(request: AnalyzeRequest):
     content = request.content.strip()
 
@@ -37,7 +33,7 @@ async def analyze(request: AnalyzeRequest):
         return JSONResponse(status_code=500, content={"error": "감정 분석 중 오류가 발생했습니다."})
 
 
-@app.post("/api/month/summarize")
+@router.post("/api/month/summarize")
 async def summarize(request: SummarizeRequest):
     if not request.entries:
         return JSONResponse(status_code=400, content={"error": "entries가 비어있습니다."})
@@ -50,7 +46,7 @@ async def summarize(request: SummarizeRequest):
         return JSONResponse(status_code=500, content={"error": "월간 요약 중 오류가 발생했습니다."})
 
 
-@app.post("/api/insights/weekly")
+@router.post("/api/insights/weekly")
 async def insights_weekly(request: WeeklyInsightRequest):
     if not request.entries:
         return JSONResponse(status_code=400, content={"error": "entries가 비어있습니다."})

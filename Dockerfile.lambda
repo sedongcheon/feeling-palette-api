@@ -3,6 +3,7 @@ FROM public.ecr.aws/lambda/python:3.11
 COPY requirements.txt ${LAMBDA_TASK_ROOT}/
 RUN pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt
 
-COPY *.py ${LAMBDA_TASK_ROOT}/
+COPY apps/ ${LAMBDA_TASK_ROOT}/apps/
+COPY domains/ ${LAMBDA_TASK_ROOT}/domains/
 
-CMD ["lambda_handler.handler"]
+CMD ["apps.api.lambda_handler.handler"]
