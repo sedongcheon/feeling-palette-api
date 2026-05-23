@@ -35,3 +35,12 @@ llm_journal = ChatGoogleGenerativeAI(
     google_api_key=GEMINI_API_KEY,
     timeout=30,
 )
+
+# /api/diary/recommend 용. 위로 글(2~3문장) + 음악·책 각 1~3개(각 title+
+# artist/author+reason) 가 다 들어가서 512 로는 부족. journal 과 같은 1024.
+llm_recommend = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash-lite",
+    max_output_tokens=1024,
+    google_api_key=GEMINI_API_KEY,
+    timeout=30,
+)

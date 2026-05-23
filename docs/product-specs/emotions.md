@@ -10,6 +10,7 @@ emotion data with a warm Korean (or English) comment.
 | POST   | `/api/diary/analyze`       | `{ content: str, locale: "ko" \| "en" }`                    | `{ primary_emotion, emotions: {6 scores}, comment, color, palette: [5 HEX] }`                 |
 | POST   | `/api/month/summarize`     | `{ year_month: "YYYY-MM", entries: EntryIn[], locale }`     | `{ summary, dominant_emotion }`                                                               |
 | POST   | `/api/insights/weekly`     | `{ anchor_date: "YYYY-MM-DD", entries: EntryIn[], locale }` | `{ insight_text, trend, keyword, confidence, care_flag }`                                     |
+| POST   | `/api/diary/recommend`     | `{ content: str, locale: "ko" \| "en" }`                    | `{ primary_emotion, comfort_message, music: [{title, artist, reason}], books: [{title, author, reason}], disclaimer }` |
 
 Authoritative schemas: [`domains/emotions/types/__init__.py`](../../domains/emotions/types/__init__.py).
 

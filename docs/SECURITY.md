@@ -31,6 +31,10 @@ to omit `1393` and emit a generic sentence instead:
   신호]` section. Drives `care_flag=true`; if true, the model appends the
   hotline sentence to `insight_text`. If `care_flag=false`, "1393" must
   not appear in the text at all.
+- `/api/diary/recommend` — `RECOMMEND_SYSTEM_PROMPT` `[안전]` section.
+  Self-harm signals append the hotline sentence to `comfort_message`.
+  Also instructs the model to avoid heavy/challenging works for deeply
+  depressed content (calm/safe/hopeful recommendations instead).
 
 ### Do not
 

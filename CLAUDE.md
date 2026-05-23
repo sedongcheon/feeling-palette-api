@@ -1,7 +1,7 @@
 # CLAUDE.md — Feeling Palette API entry point
 
 > **Mission.** A Korean emotion-analysis API. Diaries in, structured emotion
-> data + warm Korean comment out. Four endpoints, one LLM provider (Gemini
+> data + warm Korean comment out. Five endpoints, one LLM provider (Gemini
 > via LangChain). **Production = AWS Lambda (SAM).** NAS (Docker) exists
 > as a local / auxiliary container path.
 >
@@ -21,7 +21,7 @@ Keep this file under ~120 lines.
    [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 2. **Parse at the boundary.** Every endpoint accepts a Pydantic request
    model (`AnalyzeRequest` / `SummarizeRequest` / `WeeklyInsightRequest` /
-   `JournalAnalyzeRequest`); every LLM call uses
+   `JournalAnalyzeRequest` / `RecommendRequest`); every LLM call uses
    `llm.with_structured_output(...)` with a Pydantic response model and
    falls back to raw JSON parsing. No untyped dicts crossing the service
    boundary. See [docs/RELIABILITY.md](docs/RELIABILITY.md).
@@ -84,10 +84,10 @@ docker compose up --build           # exposes :8100 → :8080
 apps/api/                  FastAPI app + Lambda adapter
 domains/emotions/
   types/                   Pydantic request/response schemas
-  config/                  Gemini LLM instances (llm, llm_summary, llm_journal)
+  config/                  Gemini LLM instances (llm, llm_summary, llm_journal, llm_recommend)
   service/                 Korean system prompts + LLM orchestration
-  ui/                      FastAPI router for the 4 endpoints
-tests/                     pytest coverage for /api/v1/journal/analyze (only)
+  ui/                      FastAPI router for the 5 endpoints
+tests/                     pytest coverage for /api/v1/journal/analyze, /api/diary/recommend, and palette mapping
 docs/                      ARCHITECTURE / RELIABILITY / SECURITY / PLANS,
                            plus exec-plans/ and product-specs/
 Dockerfile, Dockerfile.lambda, docker-compose.yml, Jenkinsfile, template.yaml
@@ -111,10 +111,15 @@ Dockerfile, Dockerfile.lambda, docker-compose.yml, Jenkinsfile, template.yaml
   1~3000 chars (Pydantic 422). Month summary truncates at
   `MAX_ENTRIES=1000` (uniform-step sample) and `MAX_CONTENT_CHARS=400`
   per entry. Weekly caps at `WEEKLY_MAX_ENTRIES=60`.
-- **LLM model pin.** All three instances use `gemini-2.5-flash-lite`.
+- **LLM model pin.** All four instances use `gemini-2.5-flash-lite`.
   Don't bump without asking — `gemini-2.5-flash` was tried but its
   thinking tokens consume `max_output_tokens` and `with_structured_output`
   returns `None` (200 OK with `null` body). flash-lite avoids that.
+- **Recommend disclaimer is server-attached.** `/api/diary/recommend`
+  responses always carry `disclaimer` set by the service (one of
+  `RECOMMEND_DISCLAIMER_KO` / `RECOMMEND_DISCLAIMER_EN`), not by the LLM.
+  The LLM may hallucinate song/book titles — Flutter should display the
+  disclaimer near recommendations.
 - **Prompt-injection defense** lives inside each Korean system prompt —
   preserve it when editing.
 
