@@ -54,8 +54,9 @@ SYSTEM_PROMPT = """당신은 한국어 감정 분석 전문가입니다.
 ANALYZE_LOCALE_EN_OVERRIDE = """
 
 [Locale override — write output in English]
-- Write `comment` in warm, gentle English with a polite tone, 30~60 characters including spaces.
-- The Korean nuance rules above still help you read Korean diary text; if the diary itself is in English, interpret with general cultural sensitivity.
+- THIS BLOCK SUPERSEDES every "한국어" / "Korean" / "존댓말" requirement in the base prompt above AND in the response schema field descriptions. `comment` MUST be written in English; ignore any earlier instruction that says otherwise (including "응답은 한국어로", "comment는 한국어 존댓말로 작성", and the "따뜻한 한 줄 공감 메시지" schema description).
+- Write `comment` in warm, gentle English with a polite tone, 30~60 characters including spaces. Use observational phrasing ("It sounds like...", "It seems...") instead of declarative statements.
+- The Korean nuance rules above still help you READ Korean diary text; if the diary itself is in English, interpret with general cultural sensitivity. They do not affect the OUTPUT language.
 - Do NOT mention "1393" (it is a Korea-only hotline). If self-harm signals are detected, append to `comment` instead: "If you're struggling, please reach out to someone you trust or a local crisis helpline." (The 60-char cap is waived in this case.)
 - `primary_emotion`, emotion keys, and HEX color codes remain unchanged."""
 
@@ -343,9 +344,15 @@ async def analyze_diary(content: str, locale: str = "ko") -> AnalyzeResponse:
         ANALYZE_LOCALE_EN_OVERRIDE if locale == "en" else ""
     )
 
+    user_prompt = (
+        f"Please analyze the following diary. Write `comment` in English.\n\n{content}"
+        if locale == "en"
+        else f"다음 일기를 분석해주세요:\n\n{content}"
+    )
+
     messages = [
         SystemMessage(content=system_prompt),
-        HumanMessage(content=f"다음 일기를 분석해주세요:\n\n{content}"),
+        HumanMessage(content=user_prompt),
     ]
 
     structured_llm = llm.with_structured_output(AnalyzeResponse)
