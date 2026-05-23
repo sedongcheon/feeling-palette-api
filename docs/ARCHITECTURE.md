@@ -13,17 +13,18 @@ apps/api/
   lambda_handler.py  Mangum adapter (AWS Lambda)
 domains/emotions/
   types/             Pydantic request + response models
-  config/            Three LangChain LLM instances (Gemini)
+  config/            Four LangChain LLM instances (Gemini)
   service/           Korean system prompts + LLM orchestration
                      (analyze_diary / summarize_month / weekly_insight /
-                      analyze_journal)
+                      analyze_journal / recommend_content)
   ui/
-    routes.py        FastAPI APIRouter — 4 POST endpoints, input
+    routes.py        FastAPI APIRouter — 5 POST endpoints, input
                      validation, error envelopes
-tests/               pytest coverage for /api/v1/journal/analyze (only)
+tests/               pytest coverage for /api/v1/journal/analyze,
+                     /api/diary/recommend, and the palette mapping
 ```
 
-Currently one domain (`emotions`), four endpoints all backed by the same
+Currently one domain (`emotions`), five endpoints all backed by the same
 LLM provider. A second domain would live under `domains/<name>/` with the
 same layer split.
 

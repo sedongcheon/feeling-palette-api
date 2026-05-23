@@ -114,3 +114,35 @@ class JournalAnalyzeResponse(BaseModel):
         pattern=r"^#[0-9A-Fa-f]{6}$", description="감정에 어울리는 #RRGGBB"
     )
     color_reasoning: str = Field(description="색상 선택 이유 (1문장)")
+
+
+class RecommendRequest(BaseModel):
+    content: str = Field(description="일기 본문 (1~1000자, 라우터에서 가드)")
+    locale: LocaleKey = Field(default="ko", description="응답 언어 (ko: 한국어, en: 영어)")
+
+
+class MusicRecommendation(BaseModel):
+    title: str = Field(description="곡명")
+    artist: str = Field(description="아티스트")
+    reason: str = Field(description="이 곡을 추천하는 이유 (1~2문장)")
+
+
+class BookRecommendation(BaseModel):
+    title: str = Field(description="책 제목")
+    author: str = Field(description="저자")
+    reason: str = Field(description="이 책을 추천하는 이유 (1~2문장)")
+
+
+class RecommendResponse(BaseModel):
+    primary_emotion: str = Field(description="대표 감정 1개")
+    comfort_message: str = Field(description="따뜻한 위로의 글 (2~3문장, 100~180자)")
+    music: List[MusicRecommendation] = Field(
+        min_length=1, max_length=3, description="추천 음악 1~3개"
+    )
+    books: List[BookRecommendation] = Field(
+        min_length=1, max_length=3, description="추천 책 1~3개"
+    )
+    disclaimer: str = Field(
+        default="",
+        description="AI 추천 신뢰도 disclaimer. 서버에서 locale 기반 attach.",
+    )

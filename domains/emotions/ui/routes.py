@@ -6,12 +6,14 @@ from fastapi.responses import JSONResponse
 from domains.emotions.service import (
     analyze_diary,
     analyze_journal,
+    recommend_content,
     summarize_month,
     weekly_insight,
 )
 from domains.emotions.types import (
     AnalyzeRequest,
     JournalAnalyzeRequest,
+    RecommendRequest,
     SummarizeRequest,
     WeeklyInsightRequest,
 )
@@ -108,4 +110,26 @@ async def journal_analyze(request: JournalAnalyzeRequest):
         "journal.analyze.done user_hash=%s emotions=%d intensity=%.2f",
         user_hash_short, len(result.emotions), result.intensity_score,
     )
+    return result
+
+
+@router.post("/api/diary/recommend")
+async def recommend(request: RecommendRequest):
+    content = request.content.strip()
+
+    if not content:
+        return JSONResponse(status_code=400, content={"error": "일기 내용이 비어있습니다."})
+
+    if len(content) > 1000:
+        return JSONResponse(status_code=400, content={"error": "일기 내용은 1000자 이하로 작성해주세요."})
+
+    try:
+        result = await recommend_content(content, request.locale)
+    except Exception:
+        logger.exception("Recommend request failed")
+        return JSONResponse(status_code=500, content={"error": "콘텐츠 추천 중 오류가 발생했습니다."})
+
+    if result is None:
+        logger.error("Recommend returned None (likely truncated LLM output)")
+        return JSONResponse(status_code=500, content={"error": "콘텐츠 추천 중 오류가 발생했습니다."})
     return result

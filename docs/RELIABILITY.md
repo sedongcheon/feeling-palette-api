@@ -13,26 +13,30 @@ pytest coverage; the rest do not).
 | `POST /api/month/summarize`    | `MAX_ENTRIES = 1000` (uniform-step sampled), `MAX_CONTENT_CHARS = 400` per entry | `domains/emotions/service/__init__.py`   |
 | `POST /api/insights/weekly`    | `WEEKLY_MAX_ENTRIES = 60` (most recent by date)                                  | `domains/emotions/service/__init__.py`   |
 | `POST /api/v1/journal/analyze` | `anonymized_text` 1~3000 chars (Pydantic 422); whitespace-only → 400             | `domains/emotions/types/__init__.py` + `routes.py` |
+| `POST /api/diary/recommend`    | `content` ≤ 1000 chars (rejects with 400); whitespace-only → 400                 | `domains/emotions/ui/routes.py`          |
 
 These caps exist to keep cost and latency bounded under adversarial input.
 Don't bump them without considering p99 latency and Gemini token cost.
 
 ## LLM provider
 
-- **Model pin:** `gemini-2.5-flash-lite` for all three instances. **Do
+- **Model pin:** `gemini-2.5-flash-lite` for all four instances. **Do
   not bump without asking** — `gemini-2.5-flash` was tried and reverted:
   its thinking tokens consume the entire `max_output_tokens` budget, so
   `with_structured_output(...)` returns `None` instead of raising, which
   the routers used to forward as `200 OK` with body `null`. Existing
   Flutter clients then crash on deserialization. The router None-guards
   (below) cover the failure mode, but flash-lite is the actual fix.
-- **Three instances** in `domains/emotions/config/__init__.py`:
+- **Four instances** in `domains/emotions/config/__init__.py`:
   - `llm` — 512 max output tokens, 30s timeout. Used by `/api/diary/analyze`.
   - `llm_summary` — 2048 max output tokens, 60s timeout. Used by month
     summary and weekly insight (longer Korean output).
   - `llm_journal` — 1024 max output tokens, 30s timeout. Used by
     `/api/v1/journal/analyze` (response carries emotions[], themes[],
     empathy_response, color_reasoning — bigger than `llm`'s 512).
+  - `llm_recommend` — 1024 max output tokens, 30s timeout. Used by
+    `/api/diary/recommend` (comfort_message + music/books × up to 3 with
+    title/artist/author/reason fields each).
 - **API key:** `GEMINI_API_KEY` env var, loaded via `python-dotenv`
   locally and the deployment platform's secret store otherwise.
 
