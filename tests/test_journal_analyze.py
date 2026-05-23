@@ -83,3 +83,27 @@ async def test_journal_analyze_returns_502_on_gemini_failure(monkeypatch):
     body = resp.json()
     assert body["error"] == "AI 분석 일시 실패"
     assert body["retryable"] is True
+
+
+@pytest.mark.asyncio
+async def test_journal_analyze_returns_502_when_service_returns_none(monkeypatch):
+    # with_structured_output 이 토큰 한도 초과로 None 을 돌려주는 회귀
+    # (gemini-2.5-flash thinking 이 토큰을 다 잡아먹은 케이스)를 가드.
+    async def fake_none(text: str):
+        return None
+
+    monkeypatch.setattr("domains.emotions.ui.routes.analyze_journal", fake_none)
+
+    async with _client() as c:
+        resp = await c.post(
+            "/api/v1/journal/analyze",
+            json={
+                "anonymized_text": "오늘은 그냥 그런 하루였어.",
+                "user_id_hash": "test-user-hash-003",
+            },
+        )
+
+    assert resp.status_code == 502
+    body = resp.json()
+    assert body["error"] == "AI 분석 일시 실패"
+    assert body["retryable"] is True

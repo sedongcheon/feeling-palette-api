@@ -33,10 +33,14 @@ async def analyze(request: AnalyzeRequest):
 
     try:
         result = await analyze_diary(content, request.locale)
-        return result
     except Exception:
         logger.exception("Diary analysis request failed")
         return JSONResponse(status_code=500, content={"error": "감정 분석 중 오류가 발생했습니다."})
+
+    if result is None:
+        logger.error("Diary analysis returned None (likely truncated LLM output)")
+        return JSONResponse(status_code=500, content={"error": "감정 분석 중 오류가 발생했습니다."})
+    return result
 
 
 @router.post("/api/month/summarize")
@@ -46,10 +50,14 @@ async def summarize(request: SummarizeRequest):
 
     try:
         result = await summarize_month(request.year_month, request.entries, request.locale)
-        return result
     except Exception:
         logger.exception("Month summarize request failed")
         return JSONResponse(status_code=500, content={"error": "월간 요약 중 오류가 발생했습니다."})
+
+    if result is None:
+        logger.error("Month summary returned None (likely truncated LLM output)")
+        return JSONResponse(status_code=500, content={"error": "월간 요약 중 오류가 발생했습니다."})
+    return result
 
 
 @router.post("/api/insights/weekly")
@@ -59,10 +67,14 @@ async def insights_weekly(request: WeeklyInsightRequest):
 
     try:
         result = await weekly_insight(request.anchor_date, request.entries, request.locale)
-        return result
     except Exception:
         logger.exception("Weekly insight request failed")
         return JSONResponse(status_code=500, content={"error": "주간 인사이트 생성 중 오류가 발생했습니다."})
+
+    if result is None:
+        logger.error("Weekly insight returned None (likely truncated LLM output)")
+        return JSONResponse(status_code=500, content={"error": "주간 인사이트 생성 중 오류가 발생했습니다."})
+    return result
 
 
 @router.post("/api/v1/journal/analyze")
@@ -80,6 +92,13 @@ async def journal_analyze(request: JournalAnalyzeRequest):
         result = await analyze_journal(text)
     except Exception:
         logger.exception("journal.analyze.failed user_hash=%s", user_hash_short)
+        return JSONResponse(
+            status_code=502,
+            content={"error": "AI 분석 일시 실패", "retryable": True},
+        )
+
+    if result is None:
+        logger.error("journal.analyze.empty user_hash=%s (likely truncated LLM output)", user_hash_short)
         return JSONResponse(
             status_code=502,
             content={"error": "AI 분석 일시 실패", "retryable": True},
