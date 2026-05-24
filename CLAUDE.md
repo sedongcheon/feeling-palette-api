@@ -112,9 +112,13 @@ Dockerfile, Dockerfile.lambda, docker-compose.yml, Jenkinsfile, template.yaml
   `MAX_ENTRIES=1000` (uniform-step sample) and `MAX_CONTENT_CHARS=400`
   per entry. Weekly caps at `WEEKLY_MAX_ENTRIES=60`.
 - **LLM model pin.** All four instances use `gemini-2.5-flash-lite`.
-  Don't bump without asking — `gemini-2.5-flash` was tried but its
-  thinking tokens consume `max_output_tokens` and `with_structured_output`
-  returns `None` (200 OK with `null` body). flash-lite avoids that.
+  Don't bump without asking — two upgrade attempts (`gemini-2.5-flash`
+  and `gemini-3.1-flash-lite`) were tried and reverted. flash had
+  thinking tokens consuming `max_output_tokens`; 3.1-flash-lite broke
+  `with_structured_output` schema constraint with the pinned
+  `langchain-google-genai` and overrode the 1393 safety rule with `109`.
+  Full reasoning + re-evaluation triggers:
+  [docs/RELIABILITY.md](docs/RELIABILITY.md) Model pin section.
 - **Recommend disclaimer is server-attached.** `/api/diary/recommend`
   responses always carry `disclaimer` set by the service (one of
   `RECOMMEND_DISCLAIMER_KO` / `RECOMMEND_DISCLAIMER_EN`), not by the LLM.
