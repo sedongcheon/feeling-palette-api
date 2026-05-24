@@ -35,8 +35,9 @@ Keep this file under ~120 lines.
 1. **Plan.** For non-trivial changes, drop a short plan in
    `docs/exec-plans/active/<slug>.md` (template:
    [docs/PLANS.md](docs/PLANS.md)). Trivial diffs can skip this.
-2. **Execute.** Edit `.py` only inside `apps/` or `domains/`. For changes
-   under `ops/`, `Dockerfile*`, `template.yaml`, or any `.md`/`.yml`,
+2. **Execute.** Edit `.py` inside `apps/` or `domains/`, and `.md` docs
+   freely (docs work is part of the backend dev's role). For changes
+   under `ops/`, `Dockerfile*`, `template.yaml`, or any `.yml`,
    confirm with the user first.
 3. **Verify by hitting the API.** Default is manual via `/docs` Swagger
    UI (`uvicorn apps.api.main:app --reload --port 8080`). The
@@ -134,7 +135,8 @@ Dockerfile, Dockerfile.lambda, docker-compose.yml, Jenkinsfile, template.yaml
   Full release sequence: [docs/RELEASE.md](docs/RELEASE.md).
 - AWS CLI / Console commands: **don't execute.** Provide the exact commands
   and let the user run them.
-- Edit `.py` inside `apps/` or `domains/` primarily. For `.md`, `.yml`,
+- Edit `.py` inside `apps/` or `domains/`, and `.md` docs anywhere in the
+  repo (docs work is part of the backend dev's role). For `.yml`,
   `Dockerfile*`, `template.yaml` changes, confirm with the user first.
 
 ## Environment
