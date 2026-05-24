@@ -21,12 +21,31 @@ Don't bump them without considering p99 latency and Gemini token cost.
 ## LLM provider
 
 - **Model pin:** `gemini-2.5-flash-lite` for all four instances. **Do
-  not bump without asking** — `gemini-2.5-flash` was tried and reverted:
-  its thinking tokens consume the entire `max_output_tokens` budget, so
-  `with_structured_output(...)` returns `None` instead of raising, which
-  the routers used to forward as `200 OK` with body `null`. Existing
-  Flutter clients then crash on deserialization. The router None-guards
-  (below) cover the failure mode, but flash-lite is the actual fix.
+  not bump without asking** — two upgrade attempts have been tried and
+  reverted:
+  1. `gemini-2.5-flash` (2026-05-22): its thinking tokens consume the
+     entire `max_output_tokens` budget, so `with_structured_output(...)`
+     returns `None` instead of raising, which the routers used to forward
+     as `200 OK` with body `null`. Existing Flutter clients then crash on
+     deserialization. The router None-guards (below) cover the failure
+     mode, but flash-lite is the actual fix. Adding `thinking_budget=0`
+     fixes the silent-None but yields no measurable quality gain over
+     flash-lite at ~3.3× cost (see [[feedback-gemini-flash-experiment]]).
+  2. `gemini-3.1-flash-lite` (2026-05-24, GA model 2026-05-07):
+     `with_structured_output(Pydantic)` is silently broken — the current
+     pinned `langchain-google-genai>=2.0.0` cannot constrain the schema
+     for the 3.1 family, and the model returns its own freeform JSON
+     shape (e.g. `{message, suggestions, support_hotline}`). The service
+     fallback path didn't trigger because the existing `try/except`
+     catches exceptions only, not silent `None`. Additionally, 3.1 has
+     its own safety overlay that overrode our `1393` hotline rule with
+     `109` in at least one observation. Until langchain integration
+     catches up, 3.1 is not usable.
+
+  Treat "Gemini X.Y is GA" and "we can use it in production" as
+  independent statements. Always re-verify Korean-specific safety prompts
+  (1393 hotline rule) and `with_structured_output` schema compliance
+  when evaluating a new model.
 - **Four instances** in `domains/emotions/config/__init__.py`:
   - `llm` — 512 max output tokens, 30s timeout. Used by `/api/diary/analyze`.
   - `llm_summary` — 2048 max output tokens, 60s timeout. Used by month

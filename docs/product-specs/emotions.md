@@ -45,6 +45,12 @@ contrast as needed.
 - **No emojis** anywhere in LLM output.
 - **No PII fabrication.** The model uses only what's in the diary; it
   never invents names, places, or numbers.
+- **`/api/diary/recommend` regional preference:** under `locale="ko"`,
+  music and book recommendations prefer Korean artists / authors / Korean
+  translations of foreign titles. Foreign works are allowed only when the
+  emotion fit demands them. Under `locale="en"`, the English-market
+  preference applies instead (see `RECOMMEND_LOCALE_EN_OVERRIDE` in
+  `domains/emotions/service/__init__.py`).
 
 Sentence-length targets per endpoint live in the prompt; the
 month-summary 250-char cap is also enforced post-hoc by
