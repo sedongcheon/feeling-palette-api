@@ -1,8 +1,11 @@
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
-langchain>=0.3.0
-langchain-google-vertexai>=2.0.0
-langchain-core>=0.3.0
+# langchain 계열은 로컬 검증 버전(0.3.x / vertexai 2.1.x)으로 메이저 핀.
+# vertexai 3.x 는 numexpr 의존성이 생겨 arm64 Lambda 이미지에서 소스
+# 컴파일을 유발 (2026-06-07 배포 실패, run 27069476418).
+langchain>=0.3.0,<1
+langchain-google-vertexai>=2.0.0,<3
+langchain-core>=0.3.0,<1
 pydantic>=2.0.0
 python-dotenv>=1.0.0
 mangum>=0.17.0
