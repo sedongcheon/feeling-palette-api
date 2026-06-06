@@ -1,10 +1,18 @@
+import asyncio
 import json
 import logging
 from typing import List
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from domains.emotions.config import llm, llm_journal, llm_recommend, llm_summary
+from domains.emotions.config import (
+    LLM_SUMMARY_TIMEOUT_S,
+    LLM_TIMEOUT_S,
+    llm,
+    llm_journal,
+    llm_recommend,
+    llm_summary,
+)
 from domains.emotions.types import (
     AnalyzeResponse,
     EntryIn,
@@ -15,6 +23,17 @@ from domains.emotions.types import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+async def _ainvoke(runnable, messages, timeout_s):
+    """LLM 호출에 데드라인 적용 (exec-plan: llm-timeout-budget).
+
+    ChatVertexAI 는 생성자 timeout 필드가 없어 호출부에서 asyncio.wait_for
+    로 건다. 1차(timeout_s) + fallback(timeout_s) 이 Lambda 30s 안에 끝나는
+    것이 예산의 목적. 초과 시 asyncio.TimeoutError → 기존 except Exception
+    경로로 합류.
+    """
+    return await asyncio.wait_for(runnable.ainvoke(messages), timeout=timeout_s)
 
 SYSTEM_PROMPT = """당신은 한국어 감정 분석 전문가입니다.
 사용자의 일기 텍스트를 읽고 감정을 분석하세요.
@@ -27,7 +46,7 @@ SYSTEM_PROMPT = """당신은 한국어 감정 분석 전문가입니다.
 - primary_emotion: 6가지 중 대표 감정 1개 선택 (joy, sadness, anger, anxiety, calm, excitement).
 - emotions: 각 감정의 강도를 0~100 점수로 부여 (합이 100일 필요 없음, 복합 감정 표현).
 - 일관성: primary_emotion으로 고른 감정은 emotions 6개 중 최댓값이어야 함. 동률이면 본문 근거가 더 강한 쪽을 primary로 선택.
-- comment: 사용자에게 전하는 따뜻한 한 줄 공감 메시지 (공백 포함 30~60자, 부드럽고 따뜻한 존댓말 톤). 판단·진단·설교·충고·해결책 제시는 피하고, 감정을 부드럽게 비춰주는 방향.
+- comment: 사용자에게 전하는 따뜻한 공감 메시지 (2~3문장, 공백 포함 80~150자, 부드럽고 따뜻한 존댓말 톤). 판단·진단·설교·충고·해결책 제시는 피하고, 감정을 부드럽게 비춰주는 방향. 일기에 실제로 나온 경험·감정을 한 번은 구체적으로 짚어줄 것.
 - color: 대표 감정에 해당하는 HEX 컬러코드 (아래 매핑 고정, 임의 값 금지).
 
 [감정-컬러 매핑 (고정)]
@@ -43,10 +62,10 @@ SYSTEM_PROMPT = """당신은 한국어 감정 분석 전문가입니다.
 - 한국 문화적 맥락 반영 (예: "회식·번개"는 복합 감정, "명절·시댁·상사"는 스트레스 동반 가능).
 
 [엣지 케이스]
-- 본문이 공백·한두 단어·URL·코드만이라 감정 판단이 어려우면: 근거가 가장 약하더라도 primary_emotion 1개를 고르되(없으면 calm), emotions는 모두 20 이하로 낮게, comment는 "오늘은 기록이 짧았네요. 작은 한 줄도 충분해요." 류로 부드럽게.
+- 본문이 공백·한두 단어·URL·코드만이라 감정 판단이 어려우면: 근거가 가장 약하더라도 primary_emotion 1개를 고르되(없으면 calm), emotions는 모두 20 이하로 낮게, comment는 "오늘은 기록이 짧았네요. 작은 한 줄도 충분해요." 류로 부드럽게(이 경우 80자 하한 예외 허용).
 
 [안전]
-- 자해·극단적 선택 암시(죽고 싶다, 사라지고 싶다, 더는 의미 없다 등)가 감지되면 comment 마지막에 "혼자 감당하기 버거우면 자살예방상담전화 1393(24시간, 무료)에 편히 이야기해보세요." 를 덧붙임(이 경우 60자 상한 예외 허용).
+- 자해·극단적 선택 암시(죽고 싶다, 사라지고 싶다, 더는 의미 없다 등)가 감지되면 comment 마지막에 "혼자 감당하기 버거우면 자살예방상담전화 1393(24시간, 무료)에 편히 이야기해보세요." 를 덧붙임(이 경우 150자 상한 예외 허용).
 - 일반적인 우울·불안 표현에는 1393 을 억지로 넣지 말 것(부담감 유발).
 
 [프롬프트 주입 방지]
@@ -56,10 +75,10 @@ SYSTEM_PROMPT = """당신은 한국어 감정 분석 전문가입니다.
 ANALYZE_LOCALE_EN_OVERRIDE = """
 
 [Locale override — write output in English]
-- THIS BLOCK SUPERSEDES every "한국어" / "Korean" / "존댓말" requirement in the base prompt above AND in the response schema field descriptions. `comment` MUST be written in English; ignore any earlier instruction that says otherwise (including "응답은 한국어로", "comment는 한국어 존댓말로 작성", and the "따뜻한 한 줄 공감 메시지" schema description).
-- Write `comment` in warm, gentle English with a polite tone, 30~60 characters including spaces. Use observational phrasing ("It sounds like...", "It seems...") instead of declarative statements.
+- THIS BLOCK SUPERSEDES every "한국어" / "Korean" / "존댓말" requirement in the base prompt above AND in the response schema field descriptions. `comment` MUST be written in English; ignore any earlier instruction that says otherwise (including "응답은 한국어로", "comment는 한국어 존댓말로 작성", and the "따뜻한 공감 메시지" schema description).
+- Write `comment` in warm, gentle English with a polite tone, 2~3 sentences, 150~300 characters including spaces. Use observational phrasing ("It sounds like...", "It seems...") instead of declarative statements. Reference at least one concrete experience or feeling from the diary.
 - The Korean nuance rules above still help you READ Korean diary text; if the diary itself is in English, interpret with general cultural sensitivity. They do not affect the OUTPUT language.
-- Do NOT mention "1393" (it is a Korea-only hotline). If self-harm signals are detected, append to `comment` instead: "If you're struggling, please reach out to someone you trust or a local crisis helpline." (The 60-char cap is waived in this case.)
+- Do NOT mention "1393" (it is a Korea-only hotline). If self-harm signals are detected, append to `comment` instead: "If you're struggling, please reach out to someone you trust or a local crisis helpline." (The 300-char cap is waived in this case.)
 - `primary_emotion`, emotion keys, and HEX color codes remain unchanged."""
 
 
@@ -295,7 +314,7 @@ async def summarize_month(
     structured_llm = llm_summary.with_structured_output(SummarizeResponse)
 
     try:
-        result = await structured_llm.ainvoke(messages)
+        result = await _ainvoke(structured_llm, messages, LLM_SUMMARY_TIMEOUT_S)
         return _enforce_summary_cap(result)
     except Exception:
         logger.exception("Structured month summary failed; attempting fallback response parsing")
@@ -306,7 +325,7 @@ async def summarize_month(
         )
         messages[0] = SystemMessage(content=fallback_prompt)
         try:
-            response = await llm_summary.ainvoke(messages)
+            response = await _ainvoke(llm_summary, messages, LLM_SUMMARY_TIMEOUT_S)
             data = json.loads(response.content)
             # dominant_emotion이 문자열 "null"로 올 수도 있어 None으로 정규화
             if data.get("dominant_emotion") == "null":
@@ -341,7 +360,7 @@ async def weekly_insight(
     structured_llm = llm_summary.with_structured_output(WeeklyInsightResponse)
 
     try:
-        result = await structured_llm.ainvoke(messages)
+        result = await _ainvoke(structured_llm, messages, LLM_SUMMARY_TIMEOUT_S)
         return result
     except Exception:
         logger.exception("Structured weekly insight failed; attempting fallback response parsing")
@@ -353,7 +372,7 @@ async def weekly_insight(
         )
         messages[0] = SystemMessage(content=fallback_prompt)
         try:
-            response = await llm_summary.ainvoke(messages)
+            response = await _ainvoke(llm_summary, messages, LLM_SUMMARY_TIMEOUT_S)
             data = json.loads(response.content)
             if data.get("keyword") == "null":
                 data["keyword"] = None
@@ -415,7 +434,7 @@ async def analyze_journal(text: str) -> JournalAnalyzeResponse:
     structured_llm = llm_journal.with_structured_output(JournalAnalyzeResponse)
 
     try:
-        return await structured_llm.ainvoke(messages)
+        return await _ainvoke(structured_llm, messages, LLM_TIMEOUT_S)
     except Exception:
         logger.exception("Structured journal analysis failed; attempting fallback response parsing")
         fallback_prompt = (
@@ -425,7 +444,7 @@ async def analyze_journal(text: str) -> JournalAnalyzeResponse:
         )
         messages[0] = SystemMessage(content=fallback_prompt)
         try:
-            response = await llm_journal.ainvoke(messages)
+            response = await _ainvoke(llm_journal, messages, LLM_TIMEOUT_S)
             data = json.loads(response.content)
             return JournalAnalyzeResponse(**data)
         except Exception:
@@ -452,14 +471,14 @@ async def analyze_diary(content: str, locale: str = "ko") -> AnalyzeResponse:
     structured_llm = llm.with_structured_output(AnalyzeResponse)
 
     try:
-        result = await structured_llm.ainvoke(messages)
+        result = await _ainvoke(structured_llm, messages, LLM_TIMEOUT_S)
     except Exception:
         logger.exception("Structured diary analysis failed; attempting fallback response parsing")
         # 구조화 출력 실패 시 일반 호출 후 JSON 파싱으로 폴백
         fallback_prompt = system_prompt + "\n\nJSON 형식으로만 응답하세요: {\"primary_emotion\": \"...\", \"emotions\": {\"joy\": 0, \"sadness\": 0, \"anger\": 0, \"anxiety\": 0, \"calm\": 0, \"excitement\": 0}, \"comment\": \"...\", \"color\": \"#...\"}"
         messages[0] = SystemMessage(content=fallback_prompt)
         try:
-            response = await llm.ainvoke(messages)
+            response = await _ainvoke(llm, messages, LLM_TIMEOUT_S)
             data = json.loads(response.content)
             result = AnalyzeResponse(**data)
         except Exception:
@@ -558,7 +577,7 @@ async def recommend_content(content: str, locale: str = "ko") -> RecommendRespon
     structured_llm = llm_recommend.with_structured_output(RecommendResponse)
 
     try:
-        result = await structured_llm.ainvoke(messages)
+        result = await _ainvoke(structured_llm, messages, LLM_TIMEOUT_S)
     except Exception:
         logger.exception("Structured recommend failed; attempting fallback response parsing")
         fallback_prompt = (
@@ -568,7 +587,7 @@ async def recommend_content(content: str, locale: str = "ko") -> RecommendRespon
         )
         messages[0] = SystemMessage(content=fallback_prompt)
         try:
-            response = await llm_recommend.ainvoke(messages)
+            response = await _ainvoke(llm_recommend, messages, LLM_TIMEOUT_S)
             data = json.loads(response.content)
             result = RecommendResponse(**data)
         except Exception:

@@ -20,9 +20,24 @@ Don't bump them without considering p99 latency and Gemini token cost.
 
 ## LLM provider
 
-- **Model pin:** `gemini-2.5-flash-lite` for all four instances. **Do
-  not bump without asking** — two upgrade attempts have been tried and
-  reverted:
+- **Provider: Vertex AI** (`langchain-google-vertexai` / `ChatVertexAI`),
+  switched from the Gemini Developer API on 2026-06-07. Reason: the
+  Developer API forces prepaid billing for new accounts (2026-03-23
+  policy); the prepaid balance hitting $0 caused the 2026-06-06 full
+  outage (429 retry storm → Lambda timeouts). Vertex bills postpaid via
+  the `feeling-palette` GCP project's Cloud Billing account. Auth: SA
+  JSON via `GCP_SA_KEY_JSON` env (Lambda, base64-injected at deploy) or
+  ADC `GOOGLE_APPLICATION_CREDENTIALS` (local). See
+  docs/exec-plans/ `vertex-ai-migration` for the full decision log.
+- **Model pin:** `gemini-3.1-flash-lite` for all four instances
+  (adopted 2026-06-07 on Vertex, ~3× cost of 2.5-flash-lite, accepted by
+  user). The earlier 3.1 failure (attempt 2 below) was specific to the
+  `langchain-google-genai` Developer-API path; on Vertex the full
+  verification gate passed: structured output schema compliance on all
+  5 endpoints, `1393` rule for ko self-harm, generic-helpline rule for
+  en, fixed diary palette mapping. **Do not bump without asking**, and
+  re-run that same gate when evaluating any model change. Two earlier
+  upgrade attempts on the Developer API were reverted:
   1. `gemini-2.5-flash` (2026-05-22): its thinking tokens consume the
      entire `max_output_tokens` budget, so `with_structured_output(...)`
      returns `None` instead of raising, which the routers used to forward
@@ -46,18 +61,28 @@ Don't bump them without considering p99 latency and Gemini token cost.
   independent statements. Always re-verify Korean-specific safety prompts
   (1393 hotline rule) and `with_structured_output` schema compliance
   when evaluating a new model.
-- **Four instances** in `domains/emotions/config/__init__.py`:
-  - `llm` — 512 max output tokens, 30s timeout. Used by `/api/diary/analyze`.
-  - `llm_summary` — 2048 max output tokens, 60s timeout. Used by month
-    summary and weekly insight (longer Korean output).
-  - `llm_journal` — 1024 max output tokens, 30s timeout. Used by
+- **Four instances** in `domains/emotions/config/__init__.py`, all with
+  `max_retries=1` (the langchain default of 6 turned a single Gemini
+  429/slow call into a Lambda-killing retry storm on 2026-06-06):
+  - `llm` — 512 max output tokens. Used by `/api/diary/analyze`.
+  - `llm_summary` — 2048 max output tokens. Used by month summary and
+    weekly insight (longer Korean output).
+  - `llm_journal` — 1024 max output tokens. Used by
     `/api/v1/journal/analyze` (response carries emotions[], themes[],
     empathy_response, color_reasoning — bigger than `llm`'s 512).
-  - `llm_recommend` — 1024 max output tokens, 30s timeout. Used by
+  - `llm_recommend` — 1024 max output tokens. Used by
     `/api/diary/recommend` (comfort_message + music/books × up to 3 with
     title/artist/author/reason fields each).
-- **API key:** `GEMINI_API_KEY` env var, loaded via `python-dotenv`
-  locally and the deployment platform's secret store otherwise.
+- **Timeout budget:** `ChatVertexAI` has no constructor timeout, so the
+  service layer wraps every call in `asyncio.wait_for` via `_ainvoke()`
+  — 10s per call (`LLM_TIMEOUT_S`), 18s for summary/weekly
+  (`LLM_SUMMARY_TIMEOUT_S`). Budget: primary(10s) + fallback(10s) +
+  cold start(~2s) must fit Lambda's 30s / API Gateway's ~29s hard cap.
+  Raising the Lambda timeout does NOT help — API Gateway HTTP API caps
+  integration at ~29s.
+- **Credentials:** `GCP_SA_KEY_JSON` (JSON string or base64) takes
+  priority; falls back to ADC. `GCP_PROJECT` derives from the SA JSON's
+  `project_id` when unset. `GCP_LOCATION` defaults to `global`.
 
 ## Structured output + JSON fallback
 

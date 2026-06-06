@@ -23,7 +23,7 @@ class EmotionScores(BaseModel):
 class AnalyzeResponse(BaseModel):
     primary_emotion: str = Field(description="대표 감정: joy, sadness, anger, anxiety, calm, excitement 중 1개")
     emotions: EmotionScores = Field(description="각 감정의 강도 점수")
-    comment: str = Field(description="사용자에게 전하는 따뜻한 한 줄 공감 메시지")
+    comment: str = Field(description="사용자에게 전하는 따뜻한 공감 메시지 (2~3문장)")
     color: str = Field(description="대표 감정에 해당하는 HEX 컬러코드 (palette[0] 와 동일, backward compat)")
     palette: List[str] = Field(
         default_factory=list,
