@@ -53,16 +53,16 @@ jobs:
         with:
           use-installer: true
 
-      - name: Fetch Gemini API key from SSM
+      - name: Fetch GCP service account key from SSM
         run: |
-          KEY=$(aws ssm get-parameter \
-            --name /feeling-palette/gemini-api-key \
+          KEY_B64=$(aws ssm get-parameter \
+            --name /feeling-palette/gcp-sa-key-json \
             --with-decryption \
             --region ${{ env.AWS_REGION }} \
             --query 'Parameter.Value' \
-            --output text)
-          echo "::add-mask::$KEY"
-          echo "GEMINI_API_KEY=$KEY" >> "$GITHUB_ENV"
+            --output text | base64 -w0)
+          echo "::add-mask::$KEY_B64"
+          echo "GCP_SA_KEY_JSON_B64=$KEY_B64" >> "$GITHUB_ENV"
 
       - name: SAM deploy
         run: |
@@ -71,7 +71,7 @@ jobs:
             --stack-name ${{ env.STACK_NAME }} \
             --region ${{ env.AWS_REGION }} \
             --capabilities CAPABILITY_IAM \
-            --parameter-overrides ImageUri=$IMAGE_URI GeminiApiKey=$GEMINI_API_KEY \
+            --parameter-overrides ImageUri=$IMAGE_URI GcpSaKeyJsonB64=$GCP_SA_KEY_JSON_B64 \
             --image-repository ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
             --resolve-s3 \
             --no-confirm-changeset \

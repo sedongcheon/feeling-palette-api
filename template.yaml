@@ -6,10 +6,14 @@ Parameters:
   ImageUri:
     Type: String
     Description: ECR image URI for the Lambda function
-  GeminiApiKey:
+  GcpSaKeyJsonB64:
     Type: String
     NoEcho: true
-    Description: Gemini API key (fetched from SSM SecureString at deploy time)
+    Description: Base64-encoded GCP service account key JSON for Vertex AI (fetched from SSM SecureString at deploy time)
+  GcpLocation:
+    Type: String
+    Default: global
+    Description: Vertex AI location
   AlertEmail:
     Type: String
     Default: sedong1000@gmail.com
@@ -27,7 +31,10 @@ Resources:
       Timeout: 30
       Environment:
         Variables:
-          GEMINI_API_KEY: !Ref GeminiApiKey
+          # config 가 base64 를 감지해 디코드. GCP_PROJECT 는 SA JSON 의
+          # project_id 에서 파생되므로 별도 주입 불필요.
+          GCP_SA_KEY_JSON: !Ref GcpSaKeyJsonB64
+          GCP_LOCATION: !Ref GcpLocation
       Events:
         Analyze:
           Type: HttpApi

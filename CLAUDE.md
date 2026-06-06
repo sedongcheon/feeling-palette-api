@@ -2,7 +2,8 @@
 
 > **Mission.** A Korean emotion-analysis API. Diaries in, structured emotion
 > data + warm Korean comment out. Five endpoints, one LLM provider (Gemini
-> via LangChain). **Production = AWS Lambda (SAM).** NAS (Docker) exists
+> via Vertex AI / LangChain). **Production = AWS Lambda (SAM).** NAS (Docker)
+> exists
 > as a local / auxiliary container path.
 >
 > **Operating principle.** Humans steer. Agents execute. Keep the surface
@@ -77,7 +78,8 @@ sam build && sam deploy              # uses template.yaml
 docker compose up --build           # exposes :8100 → :8080
 ```
 
-`GEMINI_API_KEY` must be set in `.env` (gitignored).
+`GCP_PROJECT` and `GOOGLE_APPLICATION_CREDENTIALS` must be set in `.env`
+(gitignored) — see Environment section.
 
 ## Repository layout
 
@@ -85,7 +87,7 @@ docker compose up --build           # exposes :8100 → :8080
 apps/api/                  FastAPI app + Lambda adapter
 domains/emotions/
   types/                   Pydantic request/response schemas
-  config/                  Gemini LLM instances (llm, llm_summary, llm_journal, llm_recommend)
+  config/                  Vertex AI LLM instances (llm, llm_summary, llm_journal, llm_recommend)
   service/                 Korean system prompts + LLM orchestration
   ui/                      FastAPI router for the 5 endpoints
 tests/                     pytest coverage for /api/v1/journal/analyze, /api/diary/recommend, and palette mapping
@@ -112,14 +114,15 @@ Dockerfile, Dockerfile.lambda, docker-compose.yml, Jenkinsfile, template.yaml
   1~3000 chars (Pydantic 422). Month summary truncates at
   `MAX_ENTRIES=1000` (uniform-step sample) and `MAX_CONTENT_CHARS=400`
   per entry. Weekly caps at `WEEKLY_MAX_ENTRIES=60`.
-- **LLM model pin.** All four instances use `gemini-2.5-flash-lite`.
-  Don't bump without asking — two upgrade attempts (`gemini-2.5-flash`
-  and `gemini-3.1-flash-lite`) were tried and reverted. flash had
-  thinking tokens consuming `max_output_tokens`; 3.1-flash-lite broke
-  `with_structured_output` schema constraint with the pinned
-  `langchain-google-genai` and overrode the 1393 safety rule with `109`.
-  Full reasoning + re-evaluation triggers:
-  [docs/RELIABILITY.md](docs/RELIABILITY.md) Model pin section.
+- **LLM provider/model pin.** **Vertex AI** (`ChatVertexAI`) +
+  `gemini-3.1-flash-lite`, all four instances (2026-06-07: switched off
+  the Gemini Developer API after its prepaid-credit depletion caused a
+  full outage; Vertex bills postpaid). Don't bump the model without
+  asking, and any model change must pass the verification gate:
+  structured output on all 5 endpoints + 1393(ko)/generic-helpline(en)
+  rules. Earlier Developer-API attempts (`gemini-2.5-flash`,
+  3.1-via-langchain-google-genai) failed and were reverted — full
+  history: [docs/RELIABILITY.md](docs/RELIABILITY.md) LLM provider section.
 - **Recommend disclaimer is server-attached.** `/api/diary/recommend`
   responses always carry `disclaimer` set by the service (one of
   `RECOMMEND_DISCLAIMER_KO` / `RECOMMEND_DISCLAIMER_EN`), not by the LLM.
@@ -141,7 +144,12 @@ Dockerfile, Dockerfile.lambda, docker-compose.yml, Jenkinsfile, template.yaml
 
 ## Environment
 
-- `GEMINI_API_KEY` (required) — Google AI Studio key.
+- `GCP_PROJECT` + `GOOGLE_APPLICATION_CREDENTIALS` (local) — Vertex AI
+  auth via SA key file (`~/feeling-palette-sa.json`, SA:
+  `vertex-express@feeling-palette`).
+- `GCP_SA_KEY_JSON` (Lambda) — SA key JSON (base64 ok), injected at
+  deploy from SSM `/feeling-palette/gcp-sa-key-json`. `GCP_LOCATION`
+  defaults to `global`.
 - `API_AUTH_TOKEN` — currently unused on `/api/diary/analyze` (Bearer auth
   was reverted; see commit `be1952d`).
 
