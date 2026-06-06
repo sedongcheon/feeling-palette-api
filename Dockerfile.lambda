@@ -1,4 +1,7 @@
-FROM public.ecr.aws/lambda/python:3.11
+# 3.12 = Amazon Linux 2023 (glibc 2.34) — pyarrow/numpy 등 최신
+# manylinux_2_28 휠이 설치되는 베이스. 3.11(AL2, glibc 2.26)은
+# vertexai 2.1.x 의존성 트리와 휠 호환 불가 (2026-06-07).
+FROM public.ecr.aws/lambda/python:3.12
 
 COPY requirements.txt ${LAMBDA_TASK_ROOT}/
 RUN pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt

@@ -6,13 +6,11 @@ uvicorn[standard]>=0.32.0
 langchain>=0.3.0,<1
 langchain-google-vertexai>=2.0.0,<3
 langchain-core>=0.3.0,<1
-# Lambda python:3.11 베이스 = Amazon Linux 2 (glibc 2.26). 최신
-# numpy/numexpr 휠은 manylinux_2_28(glibc 2.28+) 전용이라 AL2 에서
-# 소스 컴파일로 떨어져 빌드 실패 (run 27069589258). manylinux2014
-# 휠이 있는 버전으로 핀. numexpr<2.10 은 numpy 1.x ABI 빌드라
-# numpy<2 와 반드시 세트로 유지 (섞으면 런타임 크래시).
-numpy>=1.26,<2
-numexpr>=2.8.6,<2.10
+# numpy/numexpr/pyarrow 는 핀하지 않는다 — vertexai 2.1.x 가
+# pyarrow>=18 을 요구하고, 그 휠은 glibc 2.28+ 전용이라 Lambda 베이스를
+# python:3.12(AL2023) 로 올려 해결 (2026-06-07, runs 27069476418/
+# 27069589258/27069720933). pyarrow<18 핀은 vertexai 를 2.0.x 로 조용히
+# 다운그레이드시켜 global 엔드포인트 404 를 유발하므로 금지.
 pydantic>=2.0.0
 python-dotenv>=1.0.0
 mangum>=0.17.0
